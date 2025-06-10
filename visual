@@ -1,0 +1,770 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Container,
+  Typography,
+  Box,
+  Card,
+  CardContent,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
+  Alert,
+  AlertTitle,
+  CssBaseline,
+  ThemeProvider,
+  createTheme,
+  CircularProgress,
+  Tooltip,
+} from '@mui/material';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
+import AnalyticsIcon from '@mui/icons-material/Analytics'; // For traffic
+import BugReportIcon from '@mui/icons-material/BugReport'; // For errors
+
+// Define a custom theme for a modern look and feel
+const theme = createTheme({
+  typography: {
+    fontFamily: 'Inter, sans-serif',
+    h4: {
+      fontWeight: 700,
+      marginBottom: '1rem',
+    },
+    h5: {
+      fontWeight: 600,
+      marginBottom: '0.8rem',
+    },
+    h6: {
+      fontWeight: 500,
+    },
+  },
+  palette: {
+    primary: {
+      main: '#1976d2', // A vibrant blue
+    },
+    secondary: {
+      main: '#dc004e', // A deep pink
+    },
+    success: {
+      main: '#4caf50', // Green
+    },
+    warning: {
+      main: '#ff9800', // Yellow/Orange
+    },
+    error: {
+      main: '#f44336', // Red
+    },
+    background: {
+      default: '#f4f6f8', // Light grey background for the page
+    },
+    // Adding grey palette for the latency bar background
+    grey: {
+      300: '#e0e0e0',
+      500: '#9e9e9e',
+    },
+  },
+  components: {
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12, // Rounded corners for cards
+          boxShadow: '0 4px 20px rgba(0,0,0,0.05)', // Subtle shadow
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8, // Rounded corners for chips
+          fontWeight: 600,
+          minWidth: 80,
+          justifyContent: 'center',
+        },
+      },
+    },
+    MuiTableCell: {
+      styleOverrides: {
+        head: {
+          fontWeight: 600,
+          backgroundColor: '#e0e0e0', // Slightly darker header for tables
+        },
+      },
+    },
+  },
+});
+
+// Interface for a single API endpoint
+interface Endpoint {
+  id: string;
+  name: string;
+  url: string;
+  baselineLatency: number; // Expected normal latency in ms
+  internalLatency: number | null; // Simulated latency from internal network
+  externalLatency: number | null; // Simulated latency from external public internet
+  internalHealth: 'Red' | 'Yellow' | 'Green' | 'Unknown';
+  externalHealth: 'Red' | 'Yellow' | 'Green' | 'Unknown';
+  lastChecked: Date | null;
+  internalLatencyHistory: number[]; // Store a short history of internal latencies
+  externalLatencyHistory: number[]; // Store a short history of external latencies
+  errorRate: number; // New: Percentage of errors (0-100)
+  traffic: number; // New: Simulated requests per second (RPS)
+}
+
+// Dummy data for initial endpoints
+const initialEndpoints: Endpoint[] = [
+  {
+    id: '1',
+    name: 'User Service API',
+    url: 'https://api.example.com/users',
+    baselineLatency: 100,
+    internalLatency: null,
+    externalLatency: null,
+    internalHealth: 'Unknown',
+    externalHealth: 'Unknown',
+    lastChecked: null,
+    internalLatencyHistory: [],
+    externalLatencyHistory: [],
+    errorRate: 0, // Initial error rate
+    traffic: 0, // Initial traffic
+  },
+  {
+    id: '2',
+    name: 'Product Catalog API',
+    url: 'https://api.example.com/products',
+    baselineLatency: 150,
+    internalLatency: null,
+    externalLatency: null,
+    internalHealth: 'Unknown',
+    externalHealth: 'Unknown',
+    lastChecked: null,
+    internalLatencyHistory: [],
+    externalLatencyHistory: [],
+    errorRate: 0,
+    traffic: 0,
+  },
+  {
+    id: '3',
+    name: 'Payment Gateway API',
+    url: 'https://api.example.com/payments',
+    baselineLatency: 200,
+    internalLatency: null,
+    externalLatency: null,
+    internalHealth: 'Unknown',
+    externalHealth: 'Unknown',
+    lastChecked: null,
+    internalLatencyHistory: [],
+    externalLatencyHistory: [],
+    errorRate: 0,
+    traffic: 0,
+  },
+  {
+    id: '4',
+    name: 'Notification Service',
+    url: 'https://api.example.com/notifications',
+    baselineLatency: 80,
+    internalLatency: null,
+    externalLatency: null,
+    internalHealth: 'Unknown',
+    externalHealth: 'Unknown',
+    lastChecked: null,
+    internalLatencyHistory: [],
+    externalLatencyHistory: [],
+    errorRate: 0,
+    traffic: 0,
+  },
+];
+
+// Helper function to simulate API call and determine health status based on latency
+const simulateApiCall = (baseline: number): { latency: number; health: 'Red' | 'Yellow' | 'Green'; errorRate: number; traffic: number } => {
+  const randomFactor = Math.random();
+  let latency: number;
+  let health: 'Red' | 'Yellow' | 'Green';
+  let errorRate: number;
+  let traffic: number;
+
+  if (randomFactor < 0.7) {
+    // Green: Latency within or slightly below baseline (80%-100% of baseline)
+    latency = baseline * (0.8 + Math.random() * 0.2);
+    health = 'Green';
+    errorRate = Math.round(Math.random() * 2); // 0-2% error
+    traffic = Math.round(50 + Math.random() * 100); // 50-150 RPS (normal)
+  } else if (randomFactor < 0.9) {
+    // Yellow: Latency 100-200% of baseline (degraded but not critical)
+    latency = baseline * (1.0 + Math.random() * 1.0);
+    health = 'Yellow';
+    errorRate = Math.round(3 + Math.random() * 7); // 3-10% error
+    traffic = Math.round(100 + Math.random() * 200); // 100-300 RPS (moderate to high)
+  } else {
+    // Red: Latency >200% of baseline (critical or very slow)
+    latency = baseline * (2.0 + Math.random() * 2.0);
+    health = 'Red';
+    errorRate = Math.round(10 + Math.random() * 20); // 10-30% error
+    traffic = Math.round(20 + Math.random() * 50); // 20-70 RPS (potentially low due to errors or very high burst)
+  }
+
+  // Add some slight extra randomness for more variability in latency
+  latency += Math.random() * 20;
+
+  return { latency: Math.round(latency), health, errorRate, traffic };
+};
+
+// Helper function to determine trend based on recent latency history
+const getTrend = (history: number[]): 'improving' | 'degrading' | 'stable' | 'unknown' => {
+  if (history.length < 2) {
+    return 'unknown'; // Need at least two historical points (current and one previous)
+  }
+
+  const currentLatency = history[history.length - 1];
+  const prevLatency = history[history.length - 2];
+
+  if (currentLatency < prevLatency * 0.9) { // Significantly better (10% improvement)
+    return 'improving';
+  } else if (currentLatency > prevLatency * 1.1) { // Significantly worse (10% degradation)
+    return 'degrading';
+  } else {
+    return 'stable'; // Within a reasonable range
+  }
+};
+
+// Interface for the LatencyBar component props
+interface LatencyBarProps {
+  currentLatency: number;
+  baselineLatency: number;
+  health: 'Red' | 'Yellow' | 'Green' | 'Unknown';
+}
+
+// LatencyBar component to visually represent latency against baseline
+const LatencyBar: React.FC<LatencyBarProps> = ({ currentLatency, baselineLatency, health }) => {
+  // Define a fixed width for the visual representation of the baseline (e.g., 80px)
+  // Decreased from 80px to 60px to reduce overall column width
+  const visualBaselineWidth = 60; // pixels
+
+  // Calculate the actual width of the bar. It scales with currentLatency relative to baseline.
+  const ratio = currentLatency / baselineLatency;
+  let barWidth = visualBaselineWidth * ratio;
+
+  // Cap the bar width for visual clarity if latency is extremely high.
+  // This prevents the bar from becoming excessively long while still showing the severity.
+  const maxVisualWidth = visualBaselineWidth * 2.0; // Reduced max visual width from 2.5 to 2.0
+  if (barWidth > maxVisualWidth) {
+    barWidth = maxVisualWidth;
+  }
+
+  // Determine the bar color based on the health status
+  let barColor: string;
+  switch (health) {
+    case 'Green':
+      barColor = theme.palette.success.main;
+      break;
+    case 'Yellow':
+      barColor = theme.palette.warning.main;
+      break;
+    case 'Red':
+      barColor = theme.palette.error.main;
+      break;
+    default:
+      barColor = theme.palette.grey[500]; // Default color for unknown
+      break;
+  }
+
+  return (
+    <Tooltip title={`Current: ${currentLatency}ms (Baseline: ${baselineLatency}ms)`}>
+      <Box
+        sx={{
+          width: visualBaselineWidth, // Fixed container width for the full baseline representation
+          height: 8,
+          backgroundColor: theme.palette.grey[300], // Background for the empty part of the bar
+          borderRadius: 4,
+          overflow: 'hidden', // Ensure the inner bar doesn't overflow rounded corners
+          position: 'relative',
+          mr: 1, // Margin right to separate from text and trend icon
+        }}
+      >
+        <Box
+          sx={{
+            width: `${barWidth}px`, // Dynamic width of the actual colored bar
+            height: '100%',
+            backgroundColor: barColor,
+            borderRadius: 4,
+            transition: 'width 0.3s ease-in-out, background-color 0.3s ease-in-out', // Smooth transition for updates
+          }}
+        />
+      </Box>
+    </Tooltip>
+  );
+};
+
+// Interface for the OverallApiStatusGrid component props
+interface OverallApiStatusGridProps {
+  endpoints: Endpoint[];
+}
+
+// OverallApiStatusGrid component to visualize overall API health, error rate, and traffic
+const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints }) => {
+  // Helper to determine the single overall health for an endpoint
+  const getOverallHealth = (endpoint: Endpoint): 'Red' | 'Yellow' | 'Green' | 'Unknown' => {
+    if (endpoint.internalHealth === 'Red' || endpoint.externalHealth === 'Red') {
+      return 'Red';
+    } else if (endpoint.internalHealth === 'Yellow' || endpoint.externalHealth === 'Yellow') {
+      return 'Yellow';
+    } else if (endpoint.internalHealth === 'Green' && endpoint.externalHealth === 'Green') {
+      return 'Green';
+    }
+    return 'Unknown';
+  };
+
+  // Helper function to get color for the status square (now used for border)
+  const getStatusColor = (health: 'Red' | 'Yellow' | 'Green' | 'Unknown') => {
+    switch (health) {
+      case 'Green':
+        return theme.palette.success.main;
+      case 'Yellow':
+        return theme.palette.warning.main;
+      case 'Red':
+        return theme.palette.error.main;
+      default:
+        return theme.palette.grey[500];
+    }
+  };
+
+  // Helper to get error rate color
+  const getErrorRateColor = (errorRate: number) => {
+    if (errorRate > 10) return theme.palette.error.main; // Critical error rate
+    if (errorRate > 3) return theme.palette.warning.main; // Elevated error rate
+    return theme.palette.success.main; // Acceptable error rate
+  };
+
+  // Helper to get traffic indicator color (can be adapted for more complex logic)
+  const getTrafficColor = (traffic: number) => {
+    if (traffic > 200) return theme.palette.primary.main; // High traffic
+    if (traffic < 50) return theme.palette.warning.main; // Low traffic (might indicate an issue)
+    return theme.palette.success.main; // Normal traffic
+  };
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h5" gutterBottom>
+          API Health Overview (Error Rate & Traffic)
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'center', mt: 3 }}>
+          {endpoints.map((endpoint) => {
+            const overallHealth = getOverallHealth(endpoint);
+            const statusColor = getStatusColor(overallHealth);
+            const errorColor = getErrorRateColor(endpoint.errorRate);
+            const trafficColor = getTrafficColor(endpoint.traffic);
+
+            return (
+              <Tooltip
+                key={endpoint.id}
+                title={
+                  <Box>
+                    <Typography variant="body2">{endpoint.name}</Typography>
+                    <Typography variant="body2">Overall Health: {overallHealth}</Typography>
+                    <Typography variant="body2">Error Rate: {endpoint.errorRate}%</Typography>
+                    <Typography variant="body2">Traffic: {endpoint.traffic} RPS</Typography>
+                  </Box>
+                }
+              >
+                <Card
+                  variant="outlined"
+                  sx={{
+                    width: 180,
+                    height: 120,
+                    borderRadius: 12,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'space-around',
+                    p: 1.5,
+                    boxShadow: '0 4px 15px rgba(0,0,0,0.08)',
+                    transition: 'transform 0.2s ease-in-out',
+                    '&:hover': {
+                      transform: 'scale(1.03)',
+                    },
+                    borderColor: statusColor, // Border color based on overall health
+                    borderWidth: 3,
+                    borderStyle: 'solid',
+                  }}
+                >
+                  <Typography variant="subtitle2" align="center" noWrap sx={{ fontWeight: 'bold' }}>
+                    {endpoint.name}
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                    <Chip
+                      label={`${overallHealth}`}
+                      size="small"
+                      sx={{
+                        backgroundColor: statusColor,
+                        color: 'white',
+                        fontWeight: 'bold',
+                        height: 24,
+                      }}
+                    />
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                    <BugReportIcon sx={{ fontSize: 18, color: errorColor }} />
+                    <Typography variant="body2" sx={{ color: errorColor, fontWeight: 500 }}>
+                      {endpoint.errorRate}%
+                    </Typography>
+                    <AnalyticsIcon sx={{ fontSize: 18, color: trafficColor, ml: 1 }} />
+                    <Typography variant="body2" sx={{ color: trafficColor, fontWeight: 500 }}>
+                      {endpoint.traffic} RPS
+                    </Typography>
+                  </Box>
+                </Card>
+              </Tooltip>
+            );
+          })}
+        </Box>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'center', mt: 4 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ width: 20, height: 20, borderRadius: 4, backgroundColor: theme.palette.success.main }}></Box>
+            <Typography variant="body2">Healthy / Low Error / Normal Traffic</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ width: 20, height: 20, borderRadius: 4, backgroundColor: theme.palette.warning.main }}></Box>
+            <Typography variant="body2">Degraded / Elevated Error / Low Traffic</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ width: 20, height: 20, borderRadius: 4, backgroundColor: theme.palette.error.main }}></Box>
+            <Typography variant="body2">Critical / High Error</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ width: 20, height: 20, borderRadius: 4, backgroundColor: theme.palette.primary.main }}></Box>
+            <Typography variant="body2">High Traffic</Typography>
+          </Box>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+};
+
+
+const App: React.FC = () => {
+  // State to hold the list of endpoints and their current status
+  const [endpoints, setEndpoints] = useState<Endpoint[]>(initialEndpoints);
+  // State to control the loading spinner visibility
+  const [loading, setLoading] = useState<boolean>(true);
+  // Ref to hold the interval ID for cleanup
+  const intervalRef = useRef<number | null>(null);
+
+  // Helper function to get props for Material UI Chip based on health status
+  const getStatusProps = (health: 'Red' | 'Yellow' | 'Green' | 'Unknown') => {
+    switch (health) {
+      case 'Green':
+        return { color: 'success' as const, label: 'Healthy', icon: <CheckCircleOutlineIcon fontSize="small" /> };
+      case 'Yellow':
+        return { color: 'warning' as const, label: 'Degraded', icon: <WarningAmberIcon fontSize="small" /> };
+      case 'Red':
+        return { color: 'error' as const, label: 'Critical', icon: <ErrorOutlineIcon fontSize="small" /> };
+      default:
+        return { color: 'default' as const, label: 'Unknown', icon: <CircularProgress size={16} /> };
+    }
+  };
+
+  // Helper function to get icon and tooltip for trend
+  const getTrendIcon = (trend: 'improving' | 'degrading' | 'stable' | 'unknown') => {
+    switch (trend) {
+      case 'improving':
+        return (
+          <Tooltip title="Latency Improving">
+            <ArrowDownwardIcon color="success" fontSize="small" sx={{ ml: 0.5 }} />
+          </Tooltip>
+        );
+      case 'degrading':
+        return (
+          <Tooltip title="Latency Degrading">
+            <ArrowUpwardIcon color="error" fontSize="small" sx={{ ml: 0.5 }} />
+          </Tooltip>
+        );
+      case 'stable':
+        return (
+          <Tooltip title="Latency Stable">
+            <HorizontalRuleIcon color="action" fontSize="small" sx={{ ml: 0.5 }} />
+          </Tooltip>
+        );
+      default:
+        return null;
+    }
+  };
+
+  // Function to update endpoint status by simulating API calls
+  const updateEndpointStatus = () => {
+    // Set loading to true only for a brief moment to show the check is happening
+    setLoading(true);
+
+    const updatedEndpoints = endpoints.map((endpoint) => {
+      // Simulate calls for internal and external networks
+      const { latency: internalLatency, health: internalHealth, errorRate, traffic } = simulateApiCall(endpoint.baselineLatency);
+      const { latency: externalLatency, health: externalHealth } = simulateApiCall(endpoint.baselineLatency);
+
+      // Update latency history, keeping only the last few entries (e.g., last 5)
+      const newInternalHistory = [...endpoint.internalLatencyHistory, internalLatency].slice(-5);
+      const newExternalHistory = [...endpoint.externalLatencyHistory, externalLatency].slice(-5);
+
+      return {
+        ...endpoint,
+        internalLatency,
+        internalHealth,
+        externalLatency,
+        externalHealth,
+        lastChecked: new Date(),
+        internalLatencyHistory: newInternalHistory,
+        externalLatencyHistory: newExternalHistory,
+        errorRate, // Update error rate
+        traffic, // Update traffic
+      };
+    });
+    setEndpoints(updatedEndpoints);
+    // Set loading to false after a short delay to simulate network call time
+    setTimeout(() => setLoading(false), 500);
+  };
+
+  // useEffect to handle initial API check and set up recurring interval
+  useEffect(() => {
+    // Perform an immediate update on component mount
+    updateEndpointStatus();
+
+    // Set up interval for continuous monitoring (e.g., every 15 seconds)
+    // Store the interval ID in a ref so it can be cleared later
+    intervalRef.current = window.setInterval(updateEndpointStatus, 15000); // 15 seconds
+
+    // Cleanup function: This runs when the component unmounts
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []); // Empty dependency array means this effect runs once on mount and cleans up on unmount
+
+  // Calculate summary status based on current endpoint healths
+  const totalEndpoints = endpoints.length;
+  const healthyEndpoints = endpoints.filter(
+    (ep) => ep.internalHealth === 'Green' && ep.externalHealth === 'Green'
+  ).length;
+  const yellowEndpoints = endpoints.filter(
+    (ep) => ep.internalHealth === 'Yellow' || ep.externalHealth === 'Yellow'
+  ).length;
+  const redEndpoints = endpoints.filter(
+    (ep) => ep.internalHealth === 'Red' || ep.externalHealth === 'Red'
+  ).length;
+
+  let overallStatus: 'Operational' | 'Degraded' | 'Critical' = 'Operational';
+  if (redEndpoints > 0) {
+    overallStatus = 'Critical';
+  } else if (yellowEndpoints > 0) {
+    overallStatus = 'Degraded';
+  }
+
+  return (
+    <ThemeProvider theme={theme}>
+      {/* CssBaseline resets browser default styles */}
+      <CssBaseline />
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Typography variant="h4" component="h1" gutterBottom align="center" sx={{ mb: 4, color: theme.palette.primary.main }}>
+          API Performance Monitoring Dashboard
+        </Typography>
+
+        {/* Loading spinner display */}
+        {loading && (
+          <Box display="flex" justifyContent="center" alignItems="center" height="50vh" flexDirection="column">
+            <CircularProgress size={60} sx={{ mb: 2 }} />
+            <Typography variant="h6">Simulating API Checks...</Typography>
+            <Typography variant="body2" color="textSecondary">Updates every 15 seconds</Typography>
+          </Box>
+        )}
+
+        {/* Main content displayed once loading is complete */}
+        {!loading && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* Section 1: Overall Summary Status */}
+            <Card>
+              <CardContent>
+                <Typography variant="h5" gutterBottom>
+                  Overall System Status
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                  <Chip
+                    label={overallStatus}
+                    color={
+                      overallStatus === 'Operational'
+                        ? 'success'
+                        : overallStatus === 'Degraded'
+                        ? 'warning'
+                        : 'error'
+                    }
+                    sx={{ fontSize: '1rem', padding: '0.5rem 1rem', height: 'auto' }}
+                  />
+                  <Typography variant="body1">
+                    {overallStatus === 'Operational' && 'All monitored endpoints are currently healthy and performing within expected baselines.'}
+                    {overallStatus === 'Degraded' && `Some endpoints (${yellowEndpoints} yellow) are experiencing degraded performance. Further investigation may be needed.`}
+                    {overallStatus === 'Critical' && `Critical issues detected! ${redEndpoints} endpoints are experiencing severe problems. Immediate attention required!`}
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="textSecondary">
+                  Total Endpoints Monitored: {totalEndpoints} | Healthy: {healthyEndpoints} | Degraded: {yellowEndpoints} | Critical: {redEndpoints}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            {/* Section 2: Individual Endpoint Health Status Table */}
+            <Card>
+              <CardContent>
+                <Typography variant="h5" gutterBottom>
+                  Individual Endpoint Health Status
+                </Typography>
+                <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+                  <Table stickyHeader aria-label="endpoint health table">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ minWidth: '120px' }}>Endpoint Name</TableCell> {/* Adjusted width */}
+                        <TableCell sx={{ minWidth: '120px' }}>URL</TableCell> {/* Adjusted width */}
+                        <TableCell align="center">Internal Health</TableCell>
+                        <TableCell align="center">External Health</TableCell>
+                        <TableCell align="right" sx={{ minWidth: '80px' }}>Internal Latency (ms)</TableCell> {/* Adjusted width */}
+                        <TableCell align="right" sx={{ minWidth: '80px' }}>External Latency (ms)</TableCell> {/* Adjusted width */}
+                        <TableCell align="right" sx={{ minWidth: '60px' }}>Baseline (ms)</TableCell> {/* Adjusted width */}
+                        <TableCell align="center" sx={{ minWidth: '90px' }}>Last Checked</TableCell> {/* Adjusted width */}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {endpoints.map((endpoint) => {
+                        // Determine internal and external trends
+                        const internalTrend = getTrend(endpoint.internalLatencyHistory);
+                        const externalTrend = getTrend(endpoint.externalLatencyHistory);
+
+                        return (
+                          <TableRow key={endpoint.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                            <TableCell component="th" scope="row">
+                              {endpoint.name}
+                            </TableCell>
+                            <TableCell>{endpoint.url}</TableCell>
+                            <TableCell align="center">
+                              <Chip
+                                {...getStatusProps(endpoint.internalHealth)}
+                                size="small"
+                                sx={{ width: 100 }}
+                              />
+                            </TableCell>
+                            <TableCell align="center">
+                              <Chip
+                                {...getStatusProps(endpoint.externalHealth)}
+                                size="small"
+                                sx={{ width: 100 }}
+                              />
+                            </TableCell>
+                            {/* Internal Latency Cell with Visual Bar and Trend */}
+                            <TableCell align="right">
+                              <Box display="flex" alignItems="center" justifyContent="flex-end">
+                                <Typography variant="body2" sx={{ mr: 1, minWidth: '40px', textAlign: 'right' }}>
+                                  {endpoint.internalLatency !== null ? endpoint.internalLatency : 'N/A'}
+                                </Typography>
+                                {endpoint.internalLatency !== null && (
+                                  <LatencyBar
+                                    currentLatency={endpoint.internalLatency}
+                                    baselineLatency={endpoint.baselineLatency}
+                                    health={endpoint.internalHealth}
+                                  />
+                                )}
+                                {getTrendIcon(internalTrend)}
+                              </Box>
+                            </TableCell>
+                            {/* External Latency Cell with Visual Bar and Trend */}
+                            <TableCell align="right">
+                              <Box display="flex" alignItems="center" justifyContent="flex-end">
+                                <Typography variant="body2" sx={{ mr: 1, minWidth: '40px', textAlign: 'right' }}>
+                                  {endpoint.externalLatency !== null ? endpoint.externalLatency : 'N/A'}
+                                </Typography>
+                                {endpoint.externalLatency !== null && (
+                                  <LatencyBar
+                                    currentLatency={endpoint.externalLatency}
+                                    baselineLatency={endpoint.baselineLatency}
+                                    health={endpoint.externalHealth}
+                                  />
+                                )}
+                                {getTrendIcon(externalTrend)}
+                              </Box>
+                            </TableCell>
+                            <TableCell align="right">{endpoint.baselineLatency}</TableCell>
+                            <TableCell align="center">
+                              {endpoint.lastChecked ? endpoint.lastChecked.toLocaleTimeString() : 'N/A'}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </Card>
+
+            {/* Section 2.5: Overall API Status Grid */}
+            <OverallApiStatusGrid endpoints={endpoints} />
+
+            {/* Section 3: Notification Mechanisms */}
+            <Card>
+              <CardContent>
+                <Typography variant="h5" gutterBottom>
+                  Notification & Alerting
+                </Typography>
+                <Typography variant="body1" paragraph>
+                  This Logic App can be configured to send summary status and alerts via various notification mechanisms based on defined thresholds:
+                </Typography>
+                <Alert severity="info" sx={{ mb: 1 }}>
+                  <AlertTitle>Email Notifications</AlertTitle>
+                  Automated emails can be sent to designated recipients or distribution lists for critical alerts (Red status) and daily/weekly performance summaries. This ensures key stakeholders are immediately informed of incidents.
+                </Alert>
+                <Alert severity="info" sx={{ mb: 1 }}>
+                  <AlertTitle>RSS Feed</AlertTitle>
+                  A dedicated RSS feed can be published, allowing users or other monitoring systems to subscribe and receive real-time updates on endpoint health changes, providing a low-friction subscription model.
+                </Alert>
+                <Alert severity="info">
+                  <AlertTitle>Subscription-based Notifications</AlertTitle>
+                  Integration with popular communication and incident management platforms (e.g., Slack, Microsoft Teams, PagerDuty, Opsgenie) can be established to push alerts directly to relevant channels or on-call teams for rapid response.
+                </Alert>
+              </CardContent>
+            </Card>
+
+            {/* Section 4: Automated Self-Healing Actions */}
+            <Card>
+              <CardContent>
+                <Typography variant="h5" gutterBottom>
+                  Automated Self-Healing Actions
+                </Typography>
+                <Typography variant="body1" paragraph>
+                  Under predefined conditions (e.g., an endpoint remains 'Red' for more than 5 minutes), this Logic App can trigger automated self-healing resolutions to mitigate issues without manual intervention. These actions are crucial for maintaining application availability:
+                </Typography>
+                <Alert severity="warning" sx={{ mb: 1 }}>
+                  <AlertTitle>Auto-Restart Application Service</AlertTitle>
+                  If an endpoint consistently shows a 'Red' status due to application-level errors (e.g., unhandled exceptions, memory leaks), the Logic App can automatically trigger a restart of the associated application service to clear its state.
+                </Alert>
+                <Alert severity="warning" sx={{ mb: 1 }}>
+                  <AlertTitle>IIS App Pool Recycle</AlertTitle>
+                  For web applications hosted on IIS, if an endpoint becomes unresponsive or shows degraded performance, the Logic App can initiate an automatic recycle of the relevant IIS application pool, often resolving minor resource contention issues.
+                </Alert>
+                <Alert severity="warning">
+                  <AlertTitle>Failover to Secondary Instance</AlertTitle>
+                  In a multi-instance or high-availability setup, if a primary instance's API endpoint consistently fails, the Logic App could trigger an automated failover to a healthy secondary instance, redirecting traffic and minimizing downtime.
+                </Alert>
+                <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+                  Note: The specific automation steps would involve secure API integrations with cloud providers' APIs (e.g., Azure Resource Manager, AWS CloudWatch/Lambda, GCP Cloud Functions) or on-premise orchestration tools and runbooks.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Box>
+        )}
+      </Container>
+    </ThemeProvider>
+  );
+};
+
+export default App;
