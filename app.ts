@@ -2,10 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Container,
   Typography,
-  Box,
+  Box, // Using Box for layout instead of Grid
   Card,
   CardContent,
-  Grid,
   Table,
   TableBody,
   TableCell,
@@ -348,163 +347,155 @@ const App: React.FC = () => {
 
         {/* Main content displayed once loading is complete */}
         {!loading && (
-          <Grid container spacing={3}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}> {/* Replaced Grid container with Box */}
             {/* Section 1: Overall Summary Status */}
-            <Grid item xs={12}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h5" gutterBottom>
-                    Overall System Status
+            <Card> {/* Removed Grid item */}
+              <CardContent>
+                <Typography variant="h5" gutterBottom>
+                  Overall System Status
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                  <Chip
+                    label={overallStatus}
+                    color={
+                      overallStatus === 'Operational'
+                        ? 'success'
+                        : overallStatus === 'Degraded'
+                        ? 'warning'
+                        : 'error'
+                    }
+                    sx={{ fontSize: '1rem', padding: '0.5rem 1rem', height: 'auto' }}
+                  />
+                  <Typography variant="body1">
+                    {overallStatus === 'Operational' && 'All monitored endpoints are currently healthy and performing within expected baselines.'}
+                    {overallStatus === 'Degraded' && `Some endpoints (${yellowEndpoints} yellow) are experiencing degraded performance. Further investigation may be needed.`}
+                    {overallStatus === 'Critical' && `Critical issues detected! ${redEndpoints} endpoints are experiencing severe problems. Immediate attention required!`}
                   </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                    <Chip
-                      label={overallStatus}
-                      color={
-                        overallStatus === 'Operational'
-                          ? 'success'
-                          : overallStatus === 'Degraded'
-                          ? 'warning'
-                          : 'error'
-                      }
-                      sx={{ fontSize: '1rem', padding: '0.5rem 1rem', height: 'auto' }}
-                    />
-                    <Typography variant="body1">
-                      {overallStatus === 'Operational' && 'All monitored endpoints are currently healthy and performing within expected baselines.'}
-                      {overallStatus === 'Degraded' && `Some endpoints (${yellowEndpoints} yellow) are experiencing degraded performance. Further investigation may be needed.`}
-                      {overallStatus === 'Critical' && `Critical issues detected! ${redEndpoints} endpoints are experiencing severe problems. Immediate attention required!`}
-                    </Typography>
-                  </Box>
-                  <Typography variant="body2" color="textSecondary">
-                    Total Endpoints Monitored: {totalEndpoints} | Healthy: {healthyEndpoints} | Degraded: {yellowEndpoints} | Critical: {redEndpoints}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
+                </Box>
+                <Typography variant="body2" color="textSecondary">
+                  Total Endpoints Monitored: {totalEndpoints} | Healthy: {healthyEndpoints} | Degraded: {yellowEndpoints} | Critical: {redEndpoints}
+                </Typography>
+              </CardContent>
+            </Card>
 
             {/* Section 2: Individual Endpoint Health Status Table */}
-            <Grid item xs={12}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h5" gutterBottom>
-                    Individual Endpoint Health Status
-                  </Typography>
-                  <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-                    <Table stickyHeader aria-label="endpoint health table">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Endpoint Name</TableCell>
-                          <TableCell>URL</TableCell>
-                          <TableCell align="center">Internal Health</TableCell>
-                          <TableCell align="center">External Health</TableCell>
-                          <TableCell align="right">Internal Latency (ms)</TableCell>
-                          <TableCell align="right">External Latency (ms)</TableCell>
-                          <TableCell align="right">Baseline (ms)</TableCell>
-                          <TableCell align="center">Last Checked</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {endpoints.map((endpoint) => {
-                          // Determine internal and external trends
-                          const internalTrend = getTrend(endpoint.internalLatencyHistory.slice(0, -1), endpoint.internalLatency);
-                          const externalTrend = getTrend(endpoint.externalLatencyHistory.slice(0, -1), endpoint.externalLatency);
+            <Card> {/* Removed Grid item */}
+              <CardContent>
+                <Typography variant="h5" gutterBottom>
+                  Individual Endpoint Health Status
+                </Typography>
+                <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+                  <Table stickyHeader aria-label="endpoint health table">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Endpoint Name</TableCell>
+                        <TableCell>URL</TableCell>
+                        <TableCell align="center">Internal Health</TableCell>
+                        <TableCell align="center">External Health</TableCell>
+                        <TableCell align="right">Internal Latency (ms)</TableCell>
+                        <TableCell align="right">External Latency (ms)</TableCell>
+                        <TableCell align="right">Baseline (ms)</TableCell>
+                        <TableCell align="center">Last Checked</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {endpoints.map((endpoint) => {
+                        // Determine internal and external trends
+                        const internalTrend = getTrend(endpoint.internalLatencyHistory.slice(0, -1), endpoint.internalLatency);
+                        const externalTrend = getTrend(endpoint.externalLatencyHistory.slice(0, -1), endpoint.externalLatency);
 
-                          return (
-                            <TableRow key={endpoint.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-                              <TableCell component="th" scope="row">
-                                {endpoint.name}
-                              </TableCell>
-                              <TableCell>{endpoint.url}</TableCell>
-                              <TableCell align="center">
-                                <Chip
-                                  {...getStatusProps(endpoint.internalHealth)}
-                                  size="small"
-                                  sx={{ width: 100 }}
-                                />
-                              </TableCell>
-                              <TableCell align="center">
-                                <Chip
-                                  {...getStatusProps(endpoint.externalHealth)}
-                                  size="small"
-                                  sx={{ width: 100 }}
-                                />
-                              </TableCell>
-                              <TableCell align="right" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                                {endpoint.internalLatency !== null ? endpoint.internalLatency : 'N/A'}
-                                {getTrendIcon(internalTrend)}
-                              </TableCell>
-                              <TableCell align="right" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                                {endpoint.externalLatency !== null ? endpoint.externalLatency : 'N/A'}
-                                {getTrendIcon(externalTrend)}
-                              </TableCell>
-                              <TableCell align="right">{endpoint.baselineLatency}</TableCell>
-                              <TableCell align="center">
-                                {endpoint.lastChecked ? endpoint.lastChecked.toLocaleTimeString() : 'N/A'}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </CardContent>
-              </Card>
-            </Grid>
+                        return (
+                          <TableRow key={endpoint.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                            <TableCell component="th" scope="row">
+                              {endpoint.name}
+                            </TableCell>
+                            <TableCell>{endpoint.url}</TableCell>
+                            <TableCell align="center">
+                              <Chip
+                                {...getStatusProps(endpoint.internalHealth)}
+                                size="small"
+                                sx={{ width: 100 }}
+                              />
+                            </TableCell>
+                            <TableCell align="center">
+                              <Chip
+                                {...getStatusProps(endpoint.externalHealth)}
+                                size="small"
+                                sx={{ width: 100 }}
+                              />
+                            </TableCell>
+                            <TableCell align="right" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                              {endpoint.internalLatency !== null ? endpoint.internalLatency : 'N/A'}
+                              {getTrendIcon(internalTrend)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                              {endpoint.externalLatency !== null ? endpoint.externalLatency : 'N/A'}
+                              {getTrendIcon(externalTrend)}
+                            </TableCell>
+                            <TableCell align="right">{endpoint.baselineLatency}</TableCell>
+                            <TableCell align="center">
+                              {endpoint.lastChecked ? endpoint.lastChecked.toLocaleTimeString() : 'N/A'}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </Card>
 
             {/* Section 3: Notification Mechanisms */}
-            <Grid item xs={12}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h5" gutterBottom>
-                    Notification & Alerting
-                  </Typography>
-                  <Typography variant="body1" paragraph>
-                    This Logic App can be configured to send summary status and alerts via various notification mechanisms based on defined thresholds:
-                  </Typography>
-                  <Alert severity="info" sx={{ mb: 1 }}>
-                    <AlertTitle>Email Notifications</AlertTitle>
-                    Automated emails can be sent to designated recipients or distribution lists for critical alerts (Red status) and daily/weekly performance summaries. This ensures key stakeholders are immediately informed of incidents.
-                  </Alert>
-                  <Alert severity="info" sx={{ mb: 1 }}>
-                    <AlertTitle>RSS Feed</AlertTitle>
-                    A dedicated RSS feed can be published, allowing users or other monitoring systems to subscribe and receive real-time updates on endpoint health changes, providing a low-friction subscription model.
-                  </Alert>
-                  <Alert severity="info">
-                    <AlertTitle>Subscription-based Notifications</AlertTitle>
-                    Integration with popular communication and incident management platforms (e.g., Slack, Microsoft Teams, PagerDuty, Opsgenie) can be established to push alerts directly to relevant channels or on-call teams for rapid response.
-                  </Alert>
-                </CardContent>
-              </Card>
-            </Grid>
+            <Card> {/* Removed Grid item */}
+              <CardContent>
+                <Typography variant="h5" gutterBottom>
+                  Notification & Alerting
+                </Typography>
+                <Typography variant="body1" paragraph>
+                  This Logic App can be configured to send summary status and alerts via various notification mechanisms based on defined thresholds:
+                </Typography>
+                <Alert severity="info" sx={{ mb: 1 }}>
+                  <AlertTitle>Email Notifications</AlertTitle>
+                  Automated emails can be sent to designated recipients or distribution lists for critical alerts (Red status) and daily/weekly performance summaries. This ensures key stakeholders are immediately informed of incidents.
+                </Alert>
+                <Alert severity="info" sx={{ mb: 1 }}>
+                  <AlertTitle>RSS Feed</AlertTitle>
+                  A dedicated RSS feed can be published, allowing users or other monitoring systems to subscribe and receive real-time updates on endpoint health changes, providing a low-friction subscription model.
+                </Alert>
+                <Alert severity="info">
+                  <AlertTitle>Subscription-based Notifications</AlertTitle>
+                  Integration with popular communication and incident management platforms (e.g., Slack, Microsoft Teams, PagerDuty, Opsgenie) can be established to push alerts directly to relevant channels or on-call teams for rapid response.
+                </Alert>
+              </CardContent>
+            </Card>
 
             {/* Section 4: Automated Self-Healing Actions */}
-            <Grid item xs={12}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h5" gutterBottom>
-                    Automated Self-Healing Actions
-                  </Typography>
-                  <Typography variant="body1" paragraph>
-                    Under predefined conditions (e.g., an endpoint remains 'Red' for more than 5 minutes), this Logic App can trigger automated self-healing resolutions to mitigate issues without manual intervention. These actions are crucial for maintaining application availability:
-                  </Typography>
-                  <Alert severity="warning" sx={{ mb: 1 }}>
-                    <AlertTitle>Auto-Restart Application Service</AlertTitle>
-                    If an endpoint consistently shows a 'Red' status due to application-level errors (e.g., unhandled exceptions, memory leaks), the Logic App can automatically trigger a restart of the associated application service to clear its state.
-                  </Alert>
-                  <Alert severity="warning" sx={{ mb: 1 }}>
-                    <AlertTitle>IIS App Pool Recycle</AlertTitle>
-                    For web applications hosted on IIS, if an endpoint becomes unresponsive or shows degraded performance, the Logic App can initiate an automatic recycle of the relevant IIS application pool, often resolving minor resource contention issues.
-                  </Alert>
-                  <Alert severity="warning">
-                    <AlertTitle>Failover to Secondary Instance</AlertTitle>
-                    In a multi-instance or high-availability setup, if a primary instance's API endpoint consistently fails, the Logic App could trigger an automated failover to a healthy secondary instance, redirecting traffic and minimizing downtime.
-                  </Alert>
-                  <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
-                    Note: The specific automation steps would involve secure API integrations with cloud providers' APIs (e.g., Azure Resource Manager, AWS CloudWatch/Lambda, GCP Cloud Functions) or on-premise orchestration tools and runbooks.
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
+            <Card> {/* Removed Grid item */}
+              <CardContent>
+                <Typography variant="h5" gutterBottom>
+                  Automated Self-Healing Actions
+                </Typography>
+                <Typography variant="body1" paragraph>
+                  Under predefined conditions (e.g., an endpoint remains 'Red' for more than 5 minutes), this Logic App can trigger automated self-healing resolutions to mitigate issues without manual intervention. These actions are crucial for maintaining application availability:
+                </Typography>
+                <Alert severity="warning" sx={{ mb: 1 }}>
+                  <AlertTitle>Auto-Restart Application Service</AlertTitle>
+                  If an endpoint consistently shows a 'Red' status due to application-level errors (e.g., unhandled exceptions, memory leaks), the Logic App can automatically trigger a restart of the associated application service to clear its state.
+                </Alert>
+                <Alert severity="warning" sx={{ mb: 1 }}>
+                  <AlertTitle>IIS App Pool Recycle</AlertTitle>
+                  For web applications hosted on IIS, if an endpoint becomes unresponsive or shows degraded performance, the Logic App can initiate an automatic recycle of the relevant IIS application pool, often resolving minor resource contention issues.
+                </Alert>
+                <Alert severity="warning">
+                  <AlertTitle>Failover to Secondary Instance</AlertTitle>
+                  In a multi-instance or high-availability setup, if a primary instance's API endpoint consistently fails, the Logic App could trigger an automated failover to a healthy secondary instance, redirecting traffic and minimizing downtime.
+                </Alert>
+                <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+                  Note: The specific automation steps would involve secure API integrations with cloud providers' APIs (e.g., Azure Resource Manager, AWS CloudWatch/Lambda, GCP Cloud Functions) or on-premise orchestration tools and runbooks.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Box>
         )}
       </Container>
     </ThemeProvider>
