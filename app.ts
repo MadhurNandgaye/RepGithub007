@@ -424,11 +424,11 @@ const App: React.FC = () => {
                                 sx={{ width: 100 }}
                               />
                             </TableCell>
-                            <TableCell align="right" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                            <TableCell align="right">
                               {endpoint.internalLatency !== null ? endpoint.internalLatency : 'N/A'}
                               {getTrendIcon(internalTrend)}
                             </TableCell>
-                            <TableCell align="right" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                            <TableCell align="right">
                               {endpoint.externalLatency !== null ? endpoint.externalLatency : 'N/A'}
                               {getTrendIcon(externalTrend)}
                             </TableCell>
