@@ -29,6 +29,9 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
 import AnalyticsIcon from '@mui/icons-material/Analytics'; // For traffic
 import BugReportIcon from '@mui/icons-material/BugReport'; // For errors
+import MemoryIcon from '@mui/icons-material/Memory'; // For memory usage
+import DeveloperBoardIcon from '@mui/icons-material/DeveloperBoard'; // For CPU usage
+
 
 // Define a custom theme for a modern look and feel
 const theme = createTheme({
@@ -116,6 +119,8 @@ interface Endpoint {
   externalLatencyHistory: number[]; // Store a short history of external latencies
   errorRate: number; // New: Percentage of errors (0-100)
   traffic: number; // New: Simulated requests per second (RPS)
+  cpuUsage: number; // New: Simulated CPU usage (0-100%)
+  memoryUsage: number; // New: Simulated Memory usage (0-100%)
 }
 
 // Dummy data for initial endpoints
@@ -134,6 +139,8 @@ const initialEndpoints: Endpoint[] = [
     externalLatencyHistory: [],
     errorRate: 0, // Initial error rate
     traffic: 0, // Initial traffic
+    cpuUsage: 0, // Initial CPU usage
+    memoryUsage: 0, // Initial Memory usage
   },
   {
     id: '2',
@@ -149,6 +156,8 @@ const initialEndpoints: Endpoint[] = [
     externalLatencyHistory: [],
     errorRate: 0,
     traffic: 0,
+    cpuUsage: 0,
+    memoryUsage: 0,
   },
   {
     id: '3',
@@ -164,6 +173,8 @@ const initialEndpoints: Endpoint[] = [
     externalLatencyHistory: [],
     errorRate: 0,
     traffic: 0,
+    cpuUsage: 0,
+    memoryUsage: 0,
   },
   {
     id: '4',
@@ -179,16 +190,20 @@ const initialEndpoints: Endpoint[] = [
     externalLatencyHistory: [],
     errorRate: 0,
     traffic: 0,
+    cpuUsage: 0,
+    memoryUsage: 0,
   },
 ];
 
 // Helper function to simulate API call and determine health status based on latency
-const simulateApiCall = (baseline: number): { latency: number; health: 'Red' | 'Yellow' | 'Green'; errorRate: number; traffic: number } => {
+const simulateApiCall = (baseline: number): { latency: number; health: 'Red' | 'Yellow' | 'Green'; errorRate: number; traffic: number; cpuUsage: number; memoryUsage: number } => {
   const randomFactor = Math.random();
   let latency: number;
   let health: 'Red' | 'Yellow' | 'Green';
   let errorRate: number;
   let traffic: number;
+  let cpuUsage: number;
+  let memoryUsage: number;
 
   if (randomFactor < 0.7) {
     // Green: Latency within or slightly below baseline (80%-100% of baseline)
@@ -196,24 +211,30 @@ const simulateApiCall = (baseline: number): { latency: number; health: 'Red' | '
     health = 'Green';
     errorRate = Math.round(Math.random() * 2); // 0-2% error
     traffic = Math.round(50 + Math.random() * 100); // 50-150 RPS (normal)
+    cpuUsage = Math.round(20 + Math.random() * 30); // 20-50% CPU
+    memoryUsage = Math.round(30 + Math.random() * 40); // 30-70% Memory
   } else if (randomFactor < 0.9) {
     // Yellow: Latency 100-200% of baseline (degraded but not critical)
     latency = baseline * (1.0 + Math.random() * 1.0);
     health = 'Yellow';
     errorRate = Math.round(3 + Math.random() * 7); // 3-10% error
     traffic = Math.round(100 + Math.random() * 200); // 100-300 RPS (moderate to high)
+    cpuUsage = Math.round(50 + Math.random() * 30); // 50-80% CPU
+    memoryUsage = Math.round(60 + Math.random() * 30); // 60-90% Memory
   } else {
     // Red: Latency >200% of baseline (critical or very slow)
     latency = baseline * (2.0 + Math.random() * 2.0);
     health = 'Red';
     errorRate = Math.round(10 + Math.random() * 20); // 10-30% error
-    traffic = Math.round(20 + Math.random() * 50); // 20-70 RPS (potentially low due to errors or very high burst)
+    traffic = Math.round(20 + Math.random() * 50); // 20-70 RPS (potentially low due to errors or very high burst, or very high traffic leading to issues)
+    cpuUsage = Math.round(80 + Math.random() * 15); // 80-95% CPU
+    memoryUsage = Math.round(85 + Math.random() * 10); // 85-95% Memory
   }
 
   // Add some slight extra randomness for more variability in latency
   latency += Math.random() * 20;
 
-  return { latency: Math.round(latency), health, errorRate, traffic };
+  return { latency: Math.round(latency), health, errorRate, traffic, cpuUsage, memoryUsage };
 };
 
 // Helper function to determine trend based on recent latency history
@@ -307,7 +328,7 @@ interface OverallApiStatusGridProps {
   endpoints: Endpoint[];
 }
 
-// OverallApiStatusGrid component to visualize overall API health, error rate, and traffic
+// OverallApiStatusGrid component to visualize overall API health, error rate, traffic, CPU, and Memory
 const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints }) => {
   // Helper to determine the single overall health for an endpoint
   const getOverallHealth = (endpoint: Endpoint): 'Red' | 'Yellow' | 'Green' | 'Unknown' => {
@@ -349,11 +370,18 @@ const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints }
     return theme.palette.success.main; // Normal traffic
   };
 
+  // Helper to get CPU/Memory usage color
+  const getResourceUsageColor = (usage: number) => {
+    if (usage > 85) return theme.palette.error.main; // High usage
+    if (usage > 60) return theme.palette.warning.main; // Moderate usage
+    return theme.palette.success.main; // Normal usage
+  };
+
   return (
     <Card>
       <CardContent>
         <Typography variant="h5" gutterBottom>
-          API Health Overview (Error Rate & Traffic)
+          API Health Overview (Error Rate, Traffic, CPU & Memory)
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'center', mt: 3 }}>
           {endpoints.map((endpoint) => {
@@ -361,6 +389,8 @@ const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints }
             const statusColor = getStatusColor(overallHealth);
             const errorColor = getErrorRateColor(endpoint.errorRate);
             const trafficColor = getTrafficColor(endpoint.traffic);
+            const cpuColor = getResourceUsageColor(endpoint.cpuUsage);
+            const memoryColor = getResourceUsageColor(endpoint.memoryUsage);
 
             return (
               <Tooltip
@@ -371,14 +401,16 @@ const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints }
                     <Typography variant="body2">Overall Health: {overallHealth}</Typography>
                     <Typography variant="body2">Error Rate: {endpoint.errorRate}%</Typography>
                     <Typography variant="body2">Traffic: {endpoint.traffic} RPS</Typography>
+                    <Typography variant="body2">CPU Usage: {endpoint.cpuUsage}%</Typography>
+                    <Typography variant="body2">Memory Usage: {endpoint.memoryUsage}%</Typography>
                   </Box>
                 }
               >
                 <Card
                   variant="outlined"
                   sx={{
-                    width: 180,
-                    height: 120,
+                    width: 200, // Slightly increased card width for more metrics
+                    height: 160, // Increased card height for more metrics
                     borderRadius: 12,
                     display: 'flex',
                     flexDirection: 'column',
@@ -398,7 +430,7 @@ const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints }
                   <Typography variant="subtitle2" align="center" noWrap sx={{ fontWeight: 'bold' }}>
                     {endpoint.name}
                   </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                  <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
                     <Chip
                       label={`${overallHealth}`}
                       size="small"
@@ -410,15 +442,31 @@ const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints }
                       }}
                     />
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                    <BugReportIcon sx={{ fontSize: 18, color: errorColor }} />
-                    <Typography variant="body2" sx={{ color: errorColor, fontWeight: 500 }}>
-                      {endpoint.errorRate}%
-                    </Typography>
-                    <AnalyticsIcon sx={{ fontSize: 18, color: trafficColor, ml: 1 }} />
-                    <Typography variant="body2" sx={{ color: trafficColor, fontWeight: 500 }}>
-                      {endpoint.traffic} RPS
-                    </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', mt: 1, width: '100%' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                      <BugReportIcon sx={{ fontSize: 18, color: errorColor, mr: 0.5 }} />
+                      <Typography variant="body2" sx={{ color: errorColor, fontWeight: 500 }}>
+                        Errors: {endpoint.errorRate}%
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                      <AnalyticsIcon sx={{ fontSize: 18, color: trafficColor, mr: 0.5 }} />
+                      <Typography variant="body2" sx={{ color: trafficColor, fontWeight: 500 }}>
+                        Traffic: {endpoint.traffic} RPS
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                      <DeveloperBoardIcon sx={{ fontSize: 18, color: cpuColor, mr: 0.5 }} />
+                      <Typography variant="body2" sx={{ color: cpuColor, fontWeight: 500 }}>
+                        CPU: {endpoint.cpuUsage}%
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <MemoryIcon sx={{ fontSize: 18, color: memoryColor, mr: 0.5 }} />
+                      <Typography variant="body2" sx={{ color: memoryColor, fontWeight: 500 }}>
+                        Memory: {endpoint.memoryUsage}%
+                      </Typography>
+                    </Box>
                   </Box>
                 </Card>
               </Tooltip>
@@ -428,15 +476,15 @@ const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints }
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'center', mt: 4 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 20, height: 20, borderRadius: 4, backgroundColor: theme.palette.success.main }}></Box>
-            <Typography variant="body2">Healthy / Low Error / Normal Traffic</Typography>
+            <Typography variant="body2">Healthy / Low Usage</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 20, height: 20, borderRadius: 4, backgroundColor: theme.palette.warning.main }}></Box>
-            <Typography variant="body2">Degraded / Elevated Error / Low Traffic</Typography>
+            <Typography variant="body2">Degraded / Elevated Usage</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 20, height: 20, borderRadius: 4, backgroundColor: theme.palette.error.main }}></Box>
-            <Typography variant="body2">Critical / High Error</Typography>
+            <Typography variant="body2">Critical / High Usage</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 20, height: 20, borderRadius: 4, backgroundColor: theme.palette.primary.main }}></Box>
@@ -504,7 +552,7 @@ const App: React.FC = () => {
 
     const updatedEndpoints = endpoints.map((endpoint) => {
       // Simulate calls for internal and external networks
-      const { latency: internalLatency, health: internalHealth, errorRate, traffic } = simulateApiCall(endpoint.baselineLatency);
+      const { latency: internalLatency, health: internalHealth, errorRate, traffic, cpuUsage, memoryUsage } = simulateApiCall(endpoint.baselineLatency);
       const { latency: externalLatency, health: externalHealth } = simulateApiCall(endpoint.baselineLatency);
 
       // Update latency history, keeping only the last few entries (e.g., last 5)
@@ -522,6 +570,8 @@ const App: React.FC = () => {
         externalLatencyHistory: newExternalHistory,
         errorRate, // Update error rate
         traffic, // Update traffic
+        cpuUsage, // Update CPU usage
+        memoryUsage, // Update Memory usage
       };
     });
     setEndpoints(updatedEndpoints);
@@ -626,14 +676,14 @@ const App: React.FC = () => {
                   <Table stickyHeader aria-label="endpoint health table">
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ minWidth: '120px' }}>Endpoint Name</TableCell> {/* Adjusted width */}
-                        <TableCell sx={{ minWidth: '120px' }}>URL</TableCell> {/* Adjusted width */}
+                        <TableCell sx={{ minWidth: '150px' }}>Endpoint Name</TableCell> {/* Adjusted width */}
+                        <TableCell sx={{ minWidth: '200px' }}>URL</TableCell> {/* Adjusted width */}
                         <TableCell align="center">Internal Health</TableCell>
                         <TableCell align="center">External Health</TableCell>
-                        <TableCell align="right" sx={{ minWidth: '80px' }}>Internal Latency (ms)</TableCell> {/* Adjusted width */}
-                        <TableCell align="right" sx={{ minWidth: '80px' }}>External Latency (ms)</TableCell> {/* Adjusted width */}
-                        <TableCell align="right" sx={{ minWidth: '60px' }}>Baseline (ms)</TableCell> {/* Adjusted width */}
-                        <TableCell align="center" sx={{ minWidth: '90px' }}>Last Checked</TableCell> {/* Adjusted width */}
+                        <TableCell align="right" sx={{ minWidth: '120px' }}>Internal Latency (ms)</TableCell> {/* Adjusted width */}
+                        <TableCell align="right" sx={{ minWidth: '120px' }}>External Latency (ms)</TableCell> {/* Adjusted width */}
+                        <TableCell align="right" sx={{ minWidth: '80px' }}>Baseline (ms)</TableCell> {/* Adjusted width */}
+                        <TableCell align="center" sx={{ minWidth: '100px' }}>Last Checked</TableCell> {/* Adjusted width */}
                       </TableRow>
                     </TableHead>
                     <TableBody>
