@@ -20,12 +20,13 @@ import {
   createTheme,
   CircularProgress,
   Tooltip,
-  Button, // Added for navigation buttons
-  List,    // Added for navigation list
-  ListItem, // Added for navigation list items
-  ListItemButton, // Added for navigation list item buttons
-  ListItemIcon, // Added for icons in navigation
-  ListItemText, // Added for text in navigation
+  Button,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  TextField, // Import TextField for DatePicker
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -33,28 +34,19 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
-import AnalyticsIcon from '@mui/icons-material/Analytics'; // For traffic
-import BugReportIcon from '@mui/icons-material/BugReport'; // For errors
-import MemoryIcon from '@mui/icons-material/Memory'; // For memory usage
-import DeveloperBoardIcon from '@mui/icons-material/DeveloperBoard'; // For CPU usage
-import DashboardIcon from '@mui/icons-material/Dashboard'; // For Overall Summary
-import TableChartIcon from '@mui/icons-material/TableChart'; // For Endpoint Table
-import GridOnIcon from '@mui/icons-material/GridOn'; // For Overall Grid
-import NotificationsIcon from '@mui/icons-material/Notifications'; // For Notifications
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'; // For Self-Healing
+import AnalyticsIcon from '@mui/icons-material/Analytics';
+import BugReportIcon from '@mui/icons-material/BugReport';
+import MemoryIcon from '@mui/icons-material/Memory';
+import DeveloperBoardIcon from '@mui/icons-material/DeveloperBoard';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import TableChartIcon from '@mui/icons-material/TableChart';
+import GridOnIcon from '@mui/icons-material/GridOn';
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 
-// Import Recharts components
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip, // Renamed to avoid conflict with Material-UI Tooltip
-  Legend,
-  ResponsiveContainer,
-} from 'recharts';
-
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 
 // Define a custom theme for a modern look and feel
 const theme = createTheme({
@@ -127,6 +119,12 @@ const theme = createTheme({
   },
 });
 
+// Interface for a single history data point with timestamp
+interface HistoryDataPoint {
+  value: number;
+  timestamp: Date;
+}
+
 // Interface for a single API endpoint
 interface Endpoint {
   id: string;
@@ -138,15 +136,38 @@ interface Endpoint {
   internalHealth: 'Red' | 'Yellow' | 'Green' | 'Unknown';
   externalHealth: 'Red' | 'Yellow' | 'Green' | 'Unknown';
   lastChecked: Date | null;
-  internalLatencyHistory: number[]; // Store a short history of internal latencies
-  externalLatencyHistory: number[]; // Store a short history of external latencies
+  internalLatencyHistory: HistoryDataPoint[]; // Store a short history of internal latencies with timestamps
+  externalLatencyHistory: HistoryDataPoint[]; // Store a short history of external latencies with timestamps
   errorRate: number; // New: Percentage of errors (0-100)
   traffic: number; // New: Simulated requests per second (RPS)
   cpuUsage: number; // New: Simulated CPU usage (0-100%)
   memoryUsage: number; // New: Simulated Memory usage (0-100%)
-  errorRateHistory: number[]; // New: Store history for error rate
-  cpuUsageHistory: number[]; // New: Store history for CPU usage
+  errorRateHistory: HistoryDataPoint[]; // New: Store history for error rate with timestamps
+  cpuUsageHistory: HistoryDataPoint[]; // New: Store history for CPU usage with timestamps
 }
+
+const MAX_HISTORY_LENGTH = 10; // History length for the last 10 days
+
+// Helper function to generate initial dummy history data with timestamps
+const generateDummyHistory = (
+  length: number,
+  baseValue: number,
+  amplitude: number,
+  frequency: number,
+  randomness: number,
+  daysAgo: number // Number of days ago to start generating data
+): HistoryDataPoint[] => {
+  const history: HistoryDataPoint[] = [];
+  const now = new Date();
+  for (let i = 0; i < length; i++) {
+    const value = Math.max(0, baseValue + Math.sin(i * frequency) * amplitude + Math.random() * randomness);
+    // Distribute timestamps evenly over the specified number of days
+    const timestamp = new Date(now.getTime() - (daysAgo * 24 * 60 * 60 * 1000) + (i * (daysAgo * 24 * 60 * 60 * 1000 / length)));
+    history.push({ value: parseFloat(value.toFixed(1)), timestamp });
+  }
+  return history;
+};
+
 
 // Dummy data for initial endpoints
 const initialEndpoints: Endpoint[] = [
@@ -160,14 +181,14 @@ const initialEndpoints: Endpoint[] = [
     internalHealth: 'Unknown',
     externalHealth: 'Unknown',
     lastChecked: null,
-    internalLatencyHistory: [],
-    externalLatencyHistory: [],
-    errorRate: 0, // Initial error rate
-    traffic: 0, // Initial traffic
-    cpuUsage: 0, // Initial CPU usage
-    memoryUsage: 0, // Initial Memory usage
-    errorRateHistory: [],
-    cpuUsageHistory: [],
+    internalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 100, 20, 0.5, 10, 10),
+    externalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 120, 25, 0.5, 10, 10),
+    errorRate: 0,
+    traffic: 0,
+    cpuUsage: 0,
+    memoryUsage: 0,
+    errorRateHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 1, 1, 0.3, 0.5, 10),
+    cpuUsageHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 40, 10, 0.4, 5, 10),
   },
   {
     id: '2',
@@ -179,14 +200,14 @@ const initialEndpoints: Endpoint[] = [
     internalHealth: 'Unknown',
     externalHealth: 'Unknown',
     lastChecked: null,
-    internalLatencyHistory: [],
-    externalLatencyHistory: [],
+    internalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 150, 30, 0.6, 15, 10),
+    externalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 180, 35, 0.6, 15, 10),
     errorRate: 0,
     traffic: 0,
     cpuUsage: 0,
     memoryUsage: 0,
-    errorRateHistory: [],
-    cpuUsageHistory: [],
+    errorRateHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 2, 1.5, 0.2, 0.8, 10),
+    cpuUsageHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 50, 12, 0.5, 6, 10),
   },
   {
     id: '3',
@@ -198,14 +219,14 @@ const initialEndpoints: Endpoint[] = [
     internalHealth: 'Unknown',
     externalHealth: 'Unknown',
     lastChecked: null,
-    internalLatencyHistory: [],
-    externalLatencyHistory: [],
+    internalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 200, 40, 0.4, 20, 10),
+    externalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 220, 45, 0.4, 20, 10),
     errorRate: 0,
     traffic: 0,
     cpuUsage: 0,
     memoryUsage: 0,
-    errorRateHistory: [],
-    cpuUsageHistory: [],
+    errorRateHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 0.5, 0.8, 0.4, 0.3, 10),
+    cpuUsageHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 35, 8, 0.3, 4, 10),
   },
   {
     id: '4',
@@ -217,14 +238,14 @@ const initialEndpoints: Endpoint[] = [
     internalHealth: 'Unknown',
     externalHealth: 'Unknown',
     lastChecked: null,
-    internalLatencyHistory: [],
-    externalLatencyHistory: [],
+    internalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 80, 15, 0.7, 8, 10),
+    externalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 90, 18, 0.7, 8, 10),
     errorRate: 0,
     traffic: 0,
     cpuUsage: 0,
     memoryUsage: 0,
-    errorRateHistory: [],
-    cpuUsageHistory: [],
+    errorRateHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 0.1, 0.5, 0.5, 0.2, 10),
+    cpuUsageHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 25, 7, 0.6, 3, 10),
   },
 ];
 
@@ -271,13 +292,13 @@ const simulateApiCall = (baseline: number): { latency: number; health: 'Red' | '
 };
 
 // Helper function to determine trend based on recent history
-const getTrend = (history: number[]): 'improving' | 'degrading' | 'stable' | 'unknown' => {
+const getTrend = (history: HistoryDataPoint[]): 'improving' | 'degrading' | 'stable' | 'unknown' => {
   if (history.length < 2) {
     return 'unknown'; // Need at least two historical points (current and one previous)
   }
 
-  const current = history[history.length - 1];
-  const prev = history[history.length - 2];
+  const current = history[history.length - 1].value;
+  const prev = history[history.length - 2].value;
 
   if (current < prev * 0.9) { // Significantly better (10% improvement)
     return 'improving';
@@ -359,10 +380,12 @@ const LatencyBar: React.FC<LatencyBarProps> = ({ currentLatency, baselineLatency
 // Interface for the OverallApiStatusGrid component props
 interface OverallApiStatusGridProps {
   endpoints: Endpoint[];
+  startDate: Date | null; // Added startDate prop
+  endDate: Date | null;   // Added endDate prop
 }
 
 // OverallApiStatusGrid component to visualize overall API health, error rate, traffic, CPU, and Memory
-const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints }) => {
+const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints, startDate, endDate }) => {
   // Helper to determine the single overall health for an endpoint
   const getOverallHealth = (endpoint: Endpoint): 'Red' | 'Yellow' | 'Green' | 'Unknown' => {
     if (endpoint.internalHealth === 'Red' || endpoint.externalHealth === 'Red') {
@@ -396,11 +419,24 @@ const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints }
     return theme.palette.success.main; // Normal usage
   };
 
-  // Helper to calculate average from history
-  const calculateAverage = (history: number[]) => {
-    if (history.length === 0) return 'N/A';
-    const sum = history.reduce((acc, val) => acc + val, 0);
-    return (sum / history.length).toFixed(1); // One decimal place
+  // Helper to calculate average from history based on date range
+  const calculateAverage = (history: HistoryDataPoint[], startDate: Date | null, endDate: Date | null) => {
+    let filteredHistory = history;
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+
+      filteredHistory = history.filter(point =>
+        point.timestamp.getTime() >= start.getTime() &&
+        point.timestamp.getTime() <= end.getTime()
+      );
+    }
+
+    if (filteredHistory.length === 0) return 'N/A';
+    const sum = filteredHistory.reduce((acc, val) => acc + val.value, 0);
+    return (sum / filteredHistory.length).toFixed(1); // One decimal place
   };
 
   return (
@@ -444,7 +480,7 @@ const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints }
                     {endpoint.errorRate}%
                   </TableCell>
                   <TableCell align="right">
-                    {calculateAverage(endpoint.errorRateHistory)}
+                    {calculateAverage(endpoint.errorRateHistory, startDate, endDate)}
                   </TableCell>
                   <TableCell align="right" sx={{ color: getTrafficColor(endpoint.traffic), fontWeight: 500 }}>
                     {endpoint.traffic}
@@ -453,7 +489,7 @@ const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints }
                     {endpoint.cpuUsage}%
                   </TableCell>
                   <TableCell align="right">
-                    {calculateAverage(endpoint.cpuUsageHistory)}
+                    {calculateAverage(endpoint.cpuUsageHistory, startDate, endDate)}
                   </TableCell>
                   <TableCell align="right" sx={{ color: getResourceUsageColor(endpoint.memoryUsage), fontWeight: 500 }}>
                     {endpoint.memoryUsage}%
@@ -500,89 +536,108 @@ const OverallSummaryStatus: React.FC<{ totalEndpoints: number; healthyEndpoints:
   </Card>
 );
 
-const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatusProps: Function; getTrendIcon: Function }> = ({ endpoints, getStatusProps, getTrendIcon }) => (
-  <Card>
-    <CardContent>
-      <Typography variant="h5" gutterBottom>
-        Individual Endpoint Health Status
-      </Typography>
-      <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-        <Table stickyHeader aria-label="endpoint health table">
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ minWidth: '150px' }}>Endpoint Name</TableCell>
-              <TableCell sx={{ minWidth: '200px' }}>URL</TableCell>
-              <TableCell align="center">Internal Health</TableCell>
-              <TableCell align="center">External Health</TableCell>
-              <TableCell align="right" sx={{ minWidth: '120px' }}>Internal Latency (ms)</TableCell>
-              <TableCell align="right" sx={{ minWidth: '120px' }}>External Latency (ms)</TableCell>
-              <TableCell align="right" sx={{ minWidth: '80px' }}>Baseline (ms)</TableCell>
-              <TableCell align="center" sx={{ minWidth: '100px' }}>Last Checked</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {endpoints.map((endpoint) => (
-              <TableRow key={endpoint.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-                <TableCell component="th" scope="row">
-                  {endpoint.name}
-                </TableCell>
-                <TableCell>{endpoint.url}</TableCell>
-                <TableCell align="center">
-                  <Chip
-                    {...getStatusProps(endpoint.internalHealth)}
-                    size="small"
-                    sx={{ width: 100 }}
-                  />
-                </TableCell>
-                <TableCell align="center">
-                  <Chip
-                    {...getStatusProps(endpoint.externalHealth)}
-                    size="small"
-                    sx={{ width: 100 }}
-                  />
-                </TableCell>
-                <TableCell align="right">
-                  <Box display="flex" alignItems="center" justifyContent="flex-end">
-                    <Typography variant="body2" sx={{ mr: 1, minWidth: '40px', textAlign: 'right' }}>
-                      {endpoint.internalLatency !== null ? endpoint.internalLatency : 'N/A'}
-                    </Typography>
-                    {endpoint.internalLatency !== null && (
-                      <LatencyBar
-                        currentLatency={endpoint.internalLatency}
-                        baselineLatency={endpoint.baselineLatency}
-                        health={endpoint.internalHealth}
-                      />
-                    )}
-                    {getTrendIcon(getTrend(endpoint.internalLatencyHistory))}
-                  </Box>
-                </TableCell>
-                <TableCell align="right">
-                  <Box display="flex" alignItems="center" justifyContent="flex-end">
-                    <Typography variant="body2" sx={{ mr: 1, minWidth: '40px', textAlign: 'right' }}>
-                      {endpoint.externalLatency !== null ? endpoint.externalLatency : 'N/A'}
-                    </Typography>
-                    {endpoint.externalLatency !== null && (
-                      <LatencyBar
-                        currentLatency={endpoint.externalLatency}
-                        baselineLatency={endpoint.baselineLatency}
-                        health={endpoint.externalHealth}
-                      />
-                    )}
-                    {getTrendIcon(getTrend(endpoint.externalLatencyHistory))}
-                  </Box>
-                </TableCell>
-                <TableCell align="right">{endpoint.baselineLatency}</TableCell>
-                <TableCell align="center">
-                  {endpoint.lastChecked ? endpoint.lastChecked.toLocaleTimeString() : 'N/A'}
-                </TableCell>
+const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatusProps: Function; getTrendIcon: Function; startDate: Date | null; endDate: Date | null }> = ({ endpoints, getStatusProps, getTrendIcon, startDate, endDate }) => {
+  // Filter endpoints based on the last checked date within the selected range
+  const filteredEndpoints = useMemo(() => {
+    if (!startDate || !endDate) {
+      return endpoints;
+    }
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    return endpoints.filter(endpoint =>
+      endpoint.lastChecked &&
+      endpoint.lastChecked.getTime() >= start.getTime() &&
+      endpoint.lastChecked.getTime() <= end.getTime()
+    );
+  }, [endpoints, startDate, endDate]);
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h5" gutterBottom>
+          Individual Endpoint Health Status
+        </Typography>
+        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+          <Table stickyHeader aria-label="endpoint health table">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ minWidth: '150px' }}>Endpoint Name</TableCell>
+                <TableCell sx={{ minWidth: '200px' }}>URL</TableCell>
+                <TableCell align="center">Internal Health</TableCell>
+                <TableCell align="center">External Health</TableCell>
+                <TableCell align="right" sx={{ minWidth: '120px' }}>Internal Latency (ms)</TableCell>
+                <TableCell align="right" sx={{ minWidth: '120px' }}>External Latency (ms)</TableCell>
+                <TableCell align="right" sx={{ minWidth: '80px' }}>Baseline (ms)</TableCell>
+                <TableCell align="center" sx={{ minWidth: '100px' }}>Last Checked</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </CardContent>
-  </Card>
-);
+            </TableHead>
+            <TableBody>
+              {filteredEndpoints.map((endpoint) => ( // Use filteredEndpoints here
+                <TableRow key={endpoint.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                  <TableCell component="th" scope="row">
+                    {endpoint.name}
+                  </TableCell>
+                  <TableCell>{endpoint.url}</TableCell>
+                  <TableCell align="center">
+                    <Chip
+                      {...getStatusProps(endpoint.internalHealth)}
+                      size="small"
+                      sx={{ width: 100 }}
+                    />
+                  </TableCell>
+                  <TableCell align="center">
+                    <Chip
+                      {...getStatusProps(endpoint.externalHealth)}
+                      size="small"
+                      sx={{ width: 100 }}
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    <Box display="flex" alignItems="center" justifyContent="flex-end">
+                      <Typography variant="body2" sx={{ mr: 1, minWidth: '40px', textAlign: 'right' }}>
+                        {endpoint.internalLatency !== null ? endpoint.internalLatency : 'N/A'}
+                      </Typography>
+                      {endpoint.internalLatency !== null && (
+                        <LatencyBar
+                          currentLatency={endpoint.internalLatency}
+                          baselineLatency={endpoint.baselineLatency}
+                          health={endpoint.internalHealth}
+                        />
+                      )}
+                      {getTrendIcon(getTrend(endpoint.internalLatencyHistory))}
+                    </Box>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Box display="flex" alignItems="center" justifyContent="flex-end">
+                      <Typography variant="body2" sx={{ mr: 1, minWidth: '40px', textAlign: 'right' }}>
+                        {endpoint.externalLatency !== null ? endpoint.externalLatency : 'N/A'}
+                      </Typography>
+                      {endpoint.externalLatency !== null && (
+                        <LatencyBar
+                          currentLatency={endpoint.externalLatency}
+                          baselineLatency={endpoint.baselineLatency}
+                          health={endpoint.externalHealth}
+                        />
+                      )}
+                      {getTrendIcon(getTrend(endpoint.externalLatencyHistory))}
+                    </Box>
+                  </TableCell>
+                  <TableCell align="right">{endpoint.baselineLatency}</TableCell>
+                  <TableCell align="center">
+                    {endpoint.lastChecked ? endpoint.lastChecked.toLocaleTimeString() : 'N/A'}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </Card>
+  );
+};
 
 const NotificationAlerting: React.FC = () => (
   <Card>
@@ -683,13 +738,79 @@ const COLORS = [
   '#00c49f', '#ffbb28', '#FF8042', '#AF19FF', '#FF19A3',
   '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'
 ];
-const MAX_HISTORY_LENGTH = 5;
+// MAX_HISTORY_LENGTH is defined at the top of the file
 
-const CustomChartLabel = ({ x, y, stroke, value }: any) => {
+// Custom Mini Trend Graph component
+interface MiniTrendGraphProps {
+  history: HistoryDataPoint[]; // Updated to use HistoryDataPoint[]
+  label: string;
+  unit: string;
+  color: string;
+  startDate: Date | null;
+  endDate: Date | null;
+}
+
+const MiniTrendGraph: React.FC<MiniTrendGraphProps> = ({ history, label, unit, color, startDate, endDate }) => {
+  // Filter history based on selected date range
+  const filteredHistory = useMemo(() => {
+    if (!startDate || !endDate) {
+      return history; // If no date range selected, show full history
+    }
+    // Set hours to start and end of day for accurate filtering
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    return history.filter(point =>
+      point.timestamp.getTime() >= start.getTime() &&
+      point.timestamp.getTime() <= end.getTime()
+    );
+  }, [history, startDate, endDate]);
+
+  if (filteredHistory.length === 0) {
+    return (
+      <Box sx={{ width: '100%', height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', border: '1px solid #eee', borderRadius: 2, bgcolor: '#fff' }}>
+        No data available for {label} trend in this range.
+      </Box>
+    );
+  }
+
+  // Normalize data for visual representation
+  const values = filteredHistory.map(point => point.value);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const range = maxValue - minValue;
+
   return (
-    <text x={x} y={y} dy={-10} fill={stroke} fontSize={12} textAnchor="middle">
-      {value}
-    </text>
+    <Box sx={{ width: '100%', height: 100, display: 'flex', flexDirection: 'column', p: 1, border: '1px solid #eee', borderRadius: 2, bgcolor: '#fff' }}>
+      <Typography variant="caption" color="textSecondary" sx={{ mb: 0.5 }}>
+        {label} Trend ({unit})
+      </Typography>
+      <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'flex-end', gap: '1px', overflow: 'hidden' }}>
+        {filteredHistory.map((point, index) => {
+          const normalizedHeight = range > 0 ? ((point.value - minValue) / range) * 80 + 10 : 50; // Scale to 10-90% of 100px height
+          return (
+            <Tooltip key={index} title={`${label}: ${point.value.toFixed(1)}${unit} at ${point.timestamp.toLocaleDateString()} ${point.timestamp.toLocaleTimeString()}`}>
+              <Box
+                sx={{
+                  width: `${100 / filteredHistory.length}%`, // Distribute width evenly based on filtered data
+                  height: `${normalizedHeight}%`,
+                  backgroundColor: color,
+                  borderRadius: '2px',
+                  transition: 'height 0.3s ease-out',
+                  minWidth: '2px', // Ensure bars are visible even with many data points
+                }}
+              />
+            </Tooltip>
+          );
+        })}
+      </Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+        <Typography variant="caption" color="textSecondary">Min: {minValue.toFixed(1)}{unit}</Typography>
+        <Typography variant="caption" color="textSecondary">Max: {maxValue.toFixed(1)}{unit}</Typography>
+      </Box>
+    </Box>
   );
 };
 
@@ -699,6 +820,10 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const intervalRef = useRef<number | null>(null);
   const [activeView, setActiveView] = useState<string>('summary');
+
+  // State for date range filters, initialized to the last 10 days
+  const [startDate, setStartDate] = useState<Date | null>(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000));
+  const [endDate, setEndDate] = useState<Date | null>(new Date());
 
   const getStatusProps = (health: 'Red' | 'Yellow' | 'Green' | 'Unknown') => {
     switch (health) {
@@ -744,10 +869,12 @@ const App: React.FC = () => {
       const { latency: internalLatency, health: internalHealth, errorRate, traffic, cpuUsage, memoryUsage } = simulateApiCall(endpoint.baselineLatency);
       const { latency: externalLatency, health: externalHealth } = simulateApiCall(endpoint.baselineLatency);
 
-      const newInternalLatencyHistory = [...endpoint.internalLatencyHistory, internalLatency].slice(-MAX_HISTORY_LENGTH);
-      const newExternalLatencyHistory = [...endpoint.externalLatencyHistory, externalLatency].slice(-MAX_HISTORY_LENGTH);
-      const newErrorRateHistory = [...endpoint.errorRateHistory, errorRate].slice(-MAX_HISTORY_LENGTH);
-      const newCpuUsageHistory = [...endpoint.cpuUsageHistory, cpuUsage].slice(-MAX_HISTORY_LENGTH);
+      const now = new Date(); // Get current timestamp for new data points
+
+      const newInternalLatencyHistory = [...endpoint.internalLatencyHistory, { value: internalLatency, timestamp: now }].slice(-MAX_HISTORY_LENGTH);
+      const newExternalLatencyHistory = [...endpoint.externalLatencyHistory, { value: externalLatency, timestamp: now }].slice(-MAX_HISTORY_LENGTH);
+      const newErrorRateHistory = [...endpoint.errorRateHistory, { value: errorRate, timestamp: now }].slice(-MAX_HISTORY_LENGTH);
+      const newCpuUsageHistory = [...endpoint.cpuUsageHistory, { value: cpuUsage, timestamp: now }].slice(-MAX_HISTORY_LENGTH);
 
       return {
         ...endpoint,
@@ -755,7 +882,7 @@ const App: React.FC = () => {
         internalHealth,
         externalLatency,
         externalHealth,
-        lastChecked: new Date(),
+        lastChecked: now, // Update lastChecked to current timestamp
         internalLatencyHistory: newInternalLatencyHistory,
         externalLatencyHistory: newExternalLatencyHistory,
         errorRate,
@@ -798,196 +925,128 @@ const App: React.FC = () => {
     overallStatus = 'Degraded';
   }
 
-  const combinedErrorRateChartData = useMemo(() => {
-    const dataPoints: { name: string; [key: string]: number | string | null }[] = []; // Changed type to include null
-    for (let i = 0; i < MAX_HISTORY_LENGTH; i++) {
-      const dataPoint: { name: string; [key: string]: number | string | null } = { name: `Check ${i + 1}` };
-      endpoints.forEach((endpoint) => {
-        dataPoint[`${endpoint.name}`] = endpoint.errorRateHistory[i] !== undefined ? endpoint.errorRateHistory[i] : null; // Ensure null if undefined
-      });
-      dataPoints.push(dataPoint);
-    }
-    return dataPoints;
-  }, [endpoints]);
-
-  const allErrorRateDataKeys = useMemo(() => {
-    const keys: string[] = [];
-    endpoints.forEach(endpoint => {
-      keys.push(`${endpoint.name}`);
-    });
-    return keys;
-  }, [endpoints]);
-
-  const combinedCpuUsageChartData = useMemo(() => {
-    const dataPoints: { name: string; [key: string]: number | string | null }[] = []; // Changed type to include null
-    for (let i = 0; i < MAX_HISTORY_LENGTH; i++) {
-      const dataPoint: { name: string; [key: string]: number | string | null } = { name: `Check ${i + 1}` };
-      endpoints.forEach((endpoint) => {
-        dataPoint[`${endpoint.name}`] = endpoint.cpuUsageHistory[i] !== undefined ? endpoint.cpuUsageHistory[i] : null; // Ensure null if undefined
-      });
-      dataPoints.push(dataPoint);
-    }
-    return dataPoints;
-  }, [endpoints]);
-
-  const allCpuUsageDataKeys = useMemo(() => {
-    const keys: string[] = [];
-    endpoints.forEach(endpoint => {
-      keys.push(`${endpoint.name}`);
-    });
-    return keys;
-  }, [endpoints]);
-
-  // Memoized data for the single combined Latency graph
-  const combinedLatencyChartData = useMemo(() => {
-    const dataPoints: { name: string; [key: string]: number | string | null }[] = []; // Changed type to include null
-    for (let i = 0; i < MAX_HISTORY_LENGTH; i++) {
-      const dataPoint: { name: string; [key: string]: number | string | null } = { name: `Check ${i + 1}` };
-      endpoints.forEach((endpoint) => {
-        dataPoint[`${endpoint.name} (Internal)`] = endpoint.internalLatencyHistory[i] !== undefined ? endpoint.internalLatencyHistory[i] : null;
-        dataPoint[`${endpoint.name} (External)`] = endpoint.externalLatencyHistory[i] !== undefined ? endpoint.externalLatencyHistory[i] : null;
-      });
-      dataPoints.push(dataPoint);
-    }
-    return dataPoints;
-  }, [endpoints]);
-
-  const allLatencyDataKeys = useMemo(() => {
-    const keys: string[] = [];
-    endpoints.forEach(endpoint => {
-      keys.push(`${endpoint.name} (Internal)`);
-      keys.push(`${endpoint.name} (External)`);
-    });
-    return keys;
-  }, [endpoints]);
-
+  // Function to handle filtering (re-renders charts based on new date range)
+  const handleFilterHistory = () => {
+    // A shallow copy is enough to trigger re-render for memoized components
+    setEndpoints([...endpoints]);
+  };
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Box sx={{ display: 'flex', height: '100vh', bgcolor: 'background.default' }}>
-        {/* Left Vertical Navigation */}
-        <SidebarNav onSelectView={setActiveView} activeView={activeView} />
+    <LocalizationProvider dateAdapter={AdapterDateFns}>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Box sx={{ display: 'flex', height: '100vh', bgcolor: 'background.default' }}>
+          {/* Left Vertical Navigation */}
+          <SidebarNav onSelectView={setActiveView} activeView={activeView} />
 
-        {/* Main Content Area */}
-        <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, overflowY: 'auto' }}>
-          <Typography variant="h4" component="h1" gutterBottom align="center" sx={{ mb: 4, color: theme.palette.primary.main }}>
-            API Performance Monitoring Dashboard
-          </Typography>
+          {/* Main Content Area */}
+          <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, overflowY: 'auto' }}>
+            <Typography variant="h4" component="h1" gutterBottom align="center" sx={{ mb: 4, color: theme.palette.primary.main }}>
+              API Performance Monitoring Dashboard
+            </Typography>
 
-          {loading && (
-            <Box display="flex" justifyContent="center" alignItems="center" height="50vh" flexDirection="column">
-              <CircularProgress size={60} sx={{ mb: 2 }} />
-              <Typography variant="h6">Simulating API Checks...</Typography>
-              <Typography variant="body2" color="textSecondary">Updates every 15 seconds</Typography>
+            {/* Date Range Filters and Filter Button */}
+            <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <DatePicker
+                label="From Date"
+                value={startDate}
+                onChange={(newValue) => setStartDate(newValue)}
+                slotProps={{ textField: { size: "small" } }}
+              />
+              <DatePicker
+                label="To Date"
+                value={endDate}
+                onChange={(newValue) => setEndDate(newValue)}
+                slotProps={{ textField: { size: "small" } }}
+              />
+              <Button
+                variant="contained"
+                onClick={handleFilterHistory}
+                sx={{ height: '40px' }}
+              >
+                Filter History
+              </Button>
             </Box>
-          )}
 
-          {!loading && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              {activeView === 'summary' && (
-                <OverallSummaryStatus
-                  totalEndpoints={totalEndpoints}
-                  healthyEndpoints={healthyEndpoints}
-                  yellowEndpoints={yellowEndpoints}
-                  redEndpoints={redEndpoints}
-                  overallStatus={overallStatus}
-                />
-              )}
-              {activeView === 'table' && (
-                <IndividualEndpointStatusTable
-                  endpoints={endpoints}
-                  getStatusProps={getStatusProps}
-                  getTrendIcon={getTrendIcon}
-                />
-              )}
-              {activeView === 'grid' && (
-                <OverallApiStatusGrid endpoints={endpoints} />
-              )}
+            {loading && (
+              <Box display="flex" justifyContent="center" alignItems="center" height="50vh" flexDirection="column">
+                <CircularProgress size={60} sx={{ mb: 2 }} />
+                <Typography variant="h6">Simulating API Checks...</Typography>
+                <Typography variant="body2" color="textSecondary">Updates every 15 seconds</Typography>
+              </Box>
+            )}
 
-              {activeView === 'error_cpu_charts' && (
-                <>
-                  <Card>
-                    <CardContent>
-                      <Typography variant="h5" gutterBottom>
-                        Consolidated Error Rate Trends (Last {MAX_HISTORY_LENGTH} Checks)
-                      </Typography>
-                      <Box sx={{ display: 'flex', justifyContent: 'center', minHeight: 350, maxHeight: 450, width: '100%' }}>
-                        <ResponsiveContainer width="95%" height="95%">
-                          <LineChart
-                            data={combinedErrorRateChartData}
-                            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="name" />
-                            <YAxis label={{ value: 'Error Rate (%)', angle: -90, position: 'insideLeft' }} />
-                            <RechartsTooltip />
-                            <Legend />
-                            {allErrorRateDataKeys.map((key, index) => (
-                              <Line
-                                key={key}
-                                type="monotone"
-                                dataKey={key}
-                                stroke={COLORS[index % COLORS.length]}
-                                strokeWidth={2}
-                                dot={{ r: 4 }}
-                                activeDot={{ r: 6 }}
-                                label={<CustomChartLabel />}
+            {!loading && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {activeView === 'summary' && (
+                  <OverallSummaryStatus
+                    totalEndpoints={totalEndpoints}
+                    healthyEndpoints={healthyEndpoints}
+                    yellowEndpoints={yellowEndpoints}
+                    redEndpoints={redEndpoints}
+                    overallStatus={overallStatus}
+                  />
+                )}
+                {activeView === 'table' && (
+                  <IndividualEndpointStatusTable
+                    endpoints={endpoints}
+                    getStatusProps={getStatusProps}
+                    getTrendIcon={getTrendIcon}
+                    startDate={startDate} // Pass startDate to table
+                    endDate={endDate}     // Pass endDate to table
+                  />
+                )}
+                {activeView === 'grid' && (
+                  <OverallApiStatusGrid endpoints={endpoints} startDate={startDate} endDate={endDate} />
+                )}
+
+                {activeView === 'error_cpu_charts' && (
+                  <>
+                    <Typography variant="h5" gutterBottom sx={{ mt: 2 }}>
+                      Endpoint Error Rate & CPU Usage Trends (Last {MAX_HISTORY_LENGTH} Days)
+                    </Typography>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
+                      {endpoints.map((endpoint) => (
+                        <Card key={endpoint.id}>
+                          <CardContent>
+                            <Typography variant="h6" gutterBottom>{endpoint.name}</Typography>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <MiniTrendGraph
+                                history={endpoint.errorRateHistory}
+                                label="Error Rate"
+                                unit="%"
+                                color={theme.palette.error.main}
+                                startDate={startDate}
+                                endDate={endDate}
                               />
-                            ))}
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </Box>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardContent>
-                      <Typography variant="h5" gutterBottom>
-                        Consolidated CPU Usage Trends (Last {MAX_HISTORY_LENGTH} Checks)
-                      </Typography>
-                      <Box sx={{ display: 'flex', justifyContent: 'center', minHeight: 350, maxHeight: 450, width: '100%' }}>
-                        <ResponsiveContainer width="95%" height="95%">
-                          <LineChart
-                            data={combinedCpuUsageChartData}
-                            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="name" />
-                            <YAxis label={{ value: 'CPU Usage (%)', angle: -90, position: 'insideLeft' }} />
-                            <RechartsTooltip />
-                            <Legend />
-                            {allCpuUsageDataKeys.map((key, index) => (
-                              <Line
-                                key={key}
-                                type="monotone"
-                                dataKey={key}
-                                stroke={COLORS[(index + 2) % COLORS.length]}
-                                strokeWidth={2}
-                                dot={{ r: 4 }}
-                                activeDot={{ r: 6 }}
-                                label={<CustomChartLabel />}
+                              <MiniTrendGraph
+                                history={endpoint.cpuUsageHistory}
+                                label="CPU Usage"
+                                unit="%"
+                                color={theme.palette.primary.main}
+                                startDate={startDate}
+                                endDate={endDate}
                               />
-                            ))}
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </>
-              )}
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </Box>
+                  </>
+                )}
 
-              {activeView === 'notifications' && (
-                <NotificationAlerting />
-              )}
-              {activeView === 'selfHealing' && (
-                <AutomatedSelfHealingActions />
-              )}
-            </Box>
-          )}
-        </Container>
-      </Box>
-    </ThemeProvider>
+                {activeView === 'notifications' && (
+                  <NotificationAlerting />
+                )}
+                {activeView === 'selfHealing' && (
+                  <AutomatedSelfHealingActions />
+                )}
+              </Box>
+            )}
+          </Container>
+        </Box>
+      </ThemeProvider>
+    </LocalizationProvider>
   );
 };
 
