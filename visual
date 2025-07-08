@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Container,
   Typography,
@@ -42,6 +42,18 @@ import TableChartIcon from '@mui/icons-material/TableChart'; // For Endpoint Tab
 import GridOnIcon from '@mui/icons-material/GridOn'; // For Overall Grid
 import NotificationsIcon from '@mui/icons-material/Notifications'; // For Notifications
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'; // For Self-Healing
+
+// Import Recharts components
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip, // Renamed to avoid conflict with Material-UI Tooltip
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 
 
 // Define a custom theme for a modern look and feel
@@ -132,6 +144,8 @@ interface Endpoint {
   traffic: number; // New: Simulated requests per second (RPS)
   cpuUsage: number; // New: Simulated CPU usage (0-100%)
   memoryUsage: number; // New: Simulated Memory usage (0-100%)
+  errorRateHistory: number[]; // New: Store history for error rate
+  cpuUsageHistory: number[]; // New: Store history for CPU usage
 }
 
 // Dummy data for initial endpoints
@@ -152,6 +166,8 @@ const initialEndpoints: Endpoint[] = [
     traffic: 0, // Initial traffic
     cpuUsage: 0, // Initial CPU usage
     memoryUsage: 0, // Initial Memory usage
+    errorRateHistory: [],
+    cpuUsageHistory: [],
   },
   {
     id: '2',
@@ -169,6 +185,8 @@ const initialEndpoints: Endpoint[] = [
     traffic: 0,
     cpuUsage: 0,
     memoryUsage: 0,
+    errorRateHistory: [],
+    cpuUsageHistory: [],
   },
   {
     id: '3',
@@ -186,6 +204,8 @@ const initialEndpoints: Endpoint[] = [
     traffic: 0,
     cpuUsage: 0,
     memoryUsage: 0,
+    errorRateHistory: [],
+    cpuUsageHistory: [],
   },
   {
     id: '4',
@@ -203,6 +223,8 @@ const initialEndpoints: Endpoint[] = [
     traffic: 0,
     cpuUsage: 0,
     memoryUsage: 0,
+    errorRateHistory: [],
+    cpuUsageHistory: [],
   },
 ];
 
@@ -248,18 +270,18 @@ const simulateApiCall = (baseline: number): { latency: number; health: 'Red' | '
   return { latency: Math.round(latency), health, errorRate, traffic, cpuUsage, memoryUsage };
 };
 
-// Helper function to determine trend based on recent latency history
+// Helper function to determine trend based on recent history
 const getTrend = (history: number[]): 'improving' | 'degrading' | 'stable' | 'unknown' => {
   if (history.length < 2) {
     return 'unknown'; // Need at least two historical points (current and one previous)
   }
 
-  const currentLatency = history[history.length - 1];
-  const prevLatency = history[history.length - 2];
+  const current = history[history.length - 1];
+  const prev = history[history.length - 2];
 
-  if (currentLatency < prevLatency * 0.9) { // Significantly better (10% improvement)
+  if (current < prev * 0.9) { // Significantly better (10% improvement)
     return 'improving';
-  } else if (currentLatency > prevLatency * 1.1) { // Significantly worse (10% degradation)
+  } else if (current > prev * 1.1) { // Significantly worse (10% degradation)
     return 'degrading';
   } else {
     return 'stable'; // Within a reasonable range
@@ -353,20 +375,6 @@ const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints }
     return 'Unknown';
   };
 
-  // Helper function to get color for the status square (now used for border)
-  const getStatusColor = (health: 'Red' | 'Yellow' | 'Green' | 'Unknown') => {
-    switch (health) {
-      case 'Green':
-        return theme.palette.success.main;
-      case 'Yellow':
-        return theme.palette.warning.main;
-      case 'Red':
-        return theme.palette.error.main;
-      default:
-        return theme.palette.grey[500];
-    }
-  };
-
   // Helper to get error rate color
   const getErrorRateColor = (errorRate: number) => {
     if (errorRate > 10) return theme.palette.error.main; // Critical error rate
@@ -388,120 +396,84 @@ const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints }
     return theme.palette.success.main; // Normal usage
   };
 
+  // Helper to calculate average from history
+  const calculateAverage = (history: number[]) => {
+    if (history.length === 0) return 'N/A';
+    const sum = history.reduce((acc, val) => acc + val, 0);
+    return (sum / history.length).toFixed(1); // One decimal place
+  };
+
   return (
     <Card>
       <CardContent>
         <Typography variant="h5" gutterBottom>
           API Health Overview (Error Rate, Traffic, CPU & Memory)
         </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'center', mt: 3 }}>
-          {endpoints.map((endpoint) => {
-            const overallHealth = getOverallHealth(endpoint);
-            const statusColor = getStatusColor(overallHealth);
-            const errorColor = getErrorRateColor(endpoint.errorRate);
-            const trafficColor = getTrafficColor(endpoint.traffic);
-            const cpuColor = getResourceUsageColor(endpoint.cpuUsage);
-            const memoryColor = getResourceUsageColor(endpoint.memoryUsage);
+        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+          <Table aria-label="api status grid table">
+            <TableHead>
+              <TableRow>
+                <TableCell>Endpoint Name</TableCell>
+                <TableCell align="center">Overall Health</TableCell>
+                <TableCell align="right">Current Error Rate (%)</TableCell>
+                <TableCell align="right">Avg Error Rate (%)</TableCell> {/* New Column */}
+                <TableCell align="right">Traffic (RPS)</TableCell>
+                <TableCell align="right">Current CPU Usage (%)</TableCell> {/* Renamed for clarity */}
+                <TableCell align="right">Avg CPU Usage (%)</TableCell> {/* New Column */}
+                <TableCell align="right">Current Memory Usage (%)</TableCell> {/* Renamed for clarity */}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {endpoints.map((endpoint) => {
+                const overallHealth = getOverallHealth(endpoint);
+                const errorColor = getErrorRateColor(endpoint.errorRate);
+                const trafficColor = getTrafficColor(endpoint.traffic);
+                const cpuColor = getResourceUsageColor(endpoint.cpuUsage);
+                const memoryColor = getResourceUsageColor(endpoint.memoryUsage);
 
-            return (
-              <Tooltip
-                key={endpoint.id}
-                title={
-                  <Box>
-                    <Typography variant="body2">{endpoint.name}</Typography>
-                    <Typography variant="body2">Overall Health: {overallHealth}</Typography>
-                    <Typography variant="body2">Error Rate: {endpoint.errorRate}%</Typography>
-                    <Typography variant="body2">Traffic: {endpoint.traffic} RPS</Typography>
-                    <Typography variant="body2">CPU Usage: {endpoint.cpuUsage}%</Typography>
-                    <Typography variant="body2">Memory Usage: {endpoint.memoryUsage}%</Typography>
-                  </Box>
-                }
-              >
-                <Card
-                  variant="outlined"
-                  sx={{
-                    width: 200, // Slightly increased card width for more metrics
-                    height: 160, // Increased card height for more metrics
-                    borderRadius: 12,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'space-around',
-                    p: 1.5,
-                    boxShadow: '0 4px 15px rgba(0,0,0,0.08)',
-                    transition: 'transform 0.2s ease-in-out',
-                    '&:hover': {
-                      transform: 'scale(1.03)',
-                    },
-                    borderColor: statusColor, // Border color based on overall health
-                    borderWidth: 3,
-                    borderStyle: 'solid',
-                  }}
-                >
-                  <Typography variant="subtitle2" align="center" noWrap sx={{ fontWeight: 'bold' }}>
-                    {endpoint.name}
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
-                    <Chip
-                      label={`${overallHealth}`}
-                      size="small"
-                      sx={{
-                        backgroundColor: statusColor,
-                        color: 'white',
-                        fontWeight: 'bold',
-                        height: 24,
-                      }}
-                    />
-                  </Box>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', mt: 1, width: '100%' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                      <BugReportIcon sx={{ fontSize: 18, color: errorColor, mr: 0.5 }} />
-                      <Typography variant="body2" sx={{ color: errorColor, fontWeight: 500 }}>
-                        Errors: {endpoint.errorRate}%
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                      <AnalyticsIcon sx={{ fontSize: 18, color: trafficColor, mr: 0.5 }} />
-                      <Typography variant="body2" sx={{ color: trafficColor, fontWeight: 500 }}>
-                        Traffic: {endpoint.traffic} RPS
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                      <DeveloperBoardIcon sx={{ fontSize: 18, color: cpuColor, mr: 0.5 }} />
-                      <Typography variant="body2" sx={{ color: cpuColor, fontWeight: 500 }}>
-                        CPU: {endpoint.cpuUsage}%
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <MemoryIcon sx={{ fontSize: 18, color: memoryColor, mr: 0.5 }} />
-                      <Typography variant="body2" sx={{ color: memoryColor, fontWeight: 500 }}>
-                        Memory: {endpoint.memoryUsage}%
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Card>
-              </Tooltip>
-            );
-          })}
-        </Box>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'center', mt: 4 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: 20, height: 20, borderRadius: 4, backgroundColor: theme.palette.success.main }}></Box>
-            <Typography variant="body2">Healthy / Low Usage</Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: 20, height: 20, borderRadius: 4, backgroundColor: theme.palette.warning.main }}></Box>
-            <Typography variant="body2">Degraded / Elevated Usage</Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: 20, height: 20, borderRadius: 4, backgroundColor: theme.palette.error.main }}></Box>
-            <Typography variant="body2">Critical / High Usage</Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: 20, height: 20, borderRadius: 4, backgroundColor: theme.palette.primary.main }}></Box>
-            <Typography variant="body2">High Traffic</Typography>
-          </Box>
-        </Box>
+                const avgErrorRate = calculateAverage(endpoint.errorRateHistory);
+                const avgCpuUsage = calculateAverage(endpoint.cpuUsageHistory);
+
+                return (
+                  <TableRow key={endpoint.id}>
+                    <TableCell component="th" scope="row">
+                      {endpoint.name}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Chip
+                        label={overallHealth}
+                        color={
+                          overallHealth === 'Green' ? 'success' :
+                          overallHealth === 'Yellow' ? 'warning' :
+                          overallHealth === 'Red' ? 'error' : 'default'
+                        }
+                        sx={{ width: 100 }}
+                      />
+                    </TableCell>
+                    <TableCell align="right" sx={{ color: errorColor, fontWeight: 500 }}>
+                      {endpoint.errorRate}%
+                    </TableCell>
+                    <TableCell align="right">
+                      {avgErrorRate}
+                    </TableCell>
+                    <TableCell align="right" sx={{ color: trafficColor, fontWeight: 500 }}>
+                      {endpoint.traffic}
+                    </TableCell>
+                    <TableCell align="right" sx={{ color: cpuColor, fontWeight: 500 }}>
+                      {endpoint.cpuUsage}%
+                    </TableCell>
+                    <TableCell align="right">
+                      {avgCpuUsage}
+                    </TableCell>
+                    <TableCell align="right" sx={{ color: memoryColor, fontWeight: 500 }}>
+                      {endpoint.memoryUsage}%
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </CardContent>
     </Card>
   );
@@ -692,6 +664,8 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView }) => 
     { id: 'summary', text: 'Overall Summary', icon: <DashboardIcon /> },
     { id: 'table', text: 'Endpoint Table', icon: <TableChartIcon /> },
     { id: 'grid', text: 'API Status Grid', icon: <GridOnIcon /> },
+    { id: 'latency_charts', text: 'Latency Trends', icon: <AnalyticsIcon /> }, // New item for latency charts
+    { id: 'error_cpu_charts', text: 'Error/CPU Trends', icon: <DeveloperBoardIcon /> }, // New item for error/CPU charts
     { id: 'notifications', text: 'Notifications', icon: <NotificationsIcon /> },
     { id: 'selfHealing', text: 'Self-Healing', icon: <AutoFixHighIcon /> },
   ];
@@ -721,6 +695,22 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView }) => 
   );
 };
 
+const COLORS = [
+  '#8884d8', '#82ca9d', '#ffc658', '#d0ed57', '#a4de6c',
+  '#00c49f', '#ffbb28', '#FF8042', '#AF19FF', '#FF19A3',
+  '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd' // Added more colors
+];
+const MAX_HISTORY_LENGTH = 5; // The number of data points to show in the history charts
+
+// Custom Label component for Recharts lines
+const CustomChartLabel = ({ x, y, stroke, value }: any) => {
+  return (
+    <text x={x} y={y} dy={-10} fill={stroke} fontSize={12} textAnchor="middle">
+      {value}
+    </text>
+  );
+};
+
 
 const App: React.FC = () => {
   // State to hold the list of endpoints and their current status
@@ -746,55 +736,22 @@ const App: React.FC = () => {
     }
   };
 
-  // Helper function to get icon and tooltip for trend
-  const getTrend = (history: number[]): 'improving' | 'degrading' | 'stable' | 'unknown' => {
-    if (history.length < 2) {
-      return 'unknown';
-    }
-    const currentLatency = history[history.length - 1];
-    const prevLatency = history[history.length - 2];
-    if (currentLatency < prevLatency * 0.9) {
-      return 'improving';
-    } else if (currentLatency > prevLatency * 1.1) {
-      return 'degrading';
-    } else {
-      return 'stable';
-    }
-  };
-
-  const getTrendIcon = (trend: 'improving' | 'degrading' | 'stable' | 'unknown') => {
-    switch (trend) {
-      case 'improving':
-        return (
-          <Tooltip title="Latency Improving">
-            <ArrowDownwardIcon color="success" fontSize="small" sx={{ ml: 0.5 }} />
-          </Tooltip>
-        );
-      case 'degrading':
-        return (
-          <Tooltip title="Latency Degrading">
-            <ArrowUpwardIcon color="error" fontSize="small" sx={{ ml: 0.5 }} />
-          </Tooltip>
-        );
-      case 'stable':
-        return (
-          <Tooltip title="Latency Stable">
-            <HorizontalRuleIcon color="action" fontSize="small" sx={{ ml: 0.5 }} />
-          </Tooltip>
-        );
-      default:
-        return null;
-    }
-  };
-
   // Function to update endpoint status by simulating API calls
   const updateEndpointStatus = () => {
     setLoading(true);
     const updatedEndpoints = endpoints.map((endpoint) => {
       const { latency: internalLatency, health: internalHealth, errorRate, traffic, cpuUsage, memoryUsage } = simulateApiCall(endpoint.baselineLatency);
       const { latency: externalLatency, health: externalHealth } = simulateApiCall(endpoint.baselineLatency);
-      const newInternalHistory = [...endpoint.internalLatencyHistory, internalLatency].slice(-5);
-      const newExternalHistory = [...endpoint.externalLatencyHistory, externalLatency].slice(-5);
+
+      // Update latency history
+      const newInternalLatencyHistory = [...endpoint.internalLatencyHistory, internalLatency].slice(-MAX_HISTORY_LENGTH);
+      const newExternalLatencyHistory = [...endpoint.externalLatencyHistory, externalLatency].slice(-MAX_HISTORY_LENGTH);
+
+      // Update error rate history
+      const newErrorRateHistory = [...endpoint.errorRateHistory, errorRate].slice(-MAX_HISTORY_LENGTH);
+
+      // Update CPU usage history
+      const newCpuUsageHistory = [...endpoint.cpuUsageHistory, cpuUsage].slice(-MAX_HISTORY_LENGTH);
 
       return {
         ...endpoint,
@@ -803,12 +760,14 @@ const App: React.FC = () => {
         externalLatency,
         externalHealth,
         lastChecked: new Date(),
-        internalLatencyHistory: newInternalHistory,
-        externalLatencyHistory: newExternalHistory,
+        internalLatencyHistory: newInternalLatencyHistory,
+        externalLatencyHistory: newExternalLatencyHistory,
         errorRate,
         traffic,
         cpuUsage,
         memoryUsage,
+        errorRateHistory: newErrorRateHistory,
+        cpuUsageHistory: newCpuUsageHistory,
       };
     });
     setEndpoints(updatedEndpoints);
@@ -842,6 +801,75 @@ const App: React.FC = () => {
   } else if (yellowEndpoints > 0) {
     overallStatus = 'Degraded';
   }
+
+  // Memoized data for the single combined Latency graph
+  const combinedLatencyChartData = useMemo(() => {
+    const dataPoints: { name: string; [key: string]: number | string }[] = [];
+    for (let i = 0; i < MAX_HISTORY_LENGTH; i++) {
+      const dataPoint: { name: string; [key: string]: number | string } = { name: `Check ${i + 1}` };
+      endpoints.forEach((endpoint) => {
+        dataPoint[`${endpoint.name} (Internal)`] = endpoint.internalLatencyHistory[i] || null;
+        dataPoint[`${endpoint.name} (External)`] = endpoint.externalLatencyHistory[i] || null;
+      });
+      dataPoints.push(dataPoint);
+    }
+    return dataPoints;
+  }, [endpoints]);
+
+  // Prepare all data keys for the single combined latency chart legend and lines
+  const allLatencyDataKeys = useMemo(() => {
+    const keys: string[] = [];
+    endpoints.forEach(endpoint => {
+      keys.push(`${endpoint.name} (Internal)`);
+      keys.push(`${endpoint.name} (External)`);
+    });
+    return keys;
+  }, [endpoints]);
+
+  // Memoized data for the single combined Error Rate graph
+  const combinedErrorRateChartData = useMemo(() => {
+    const dataPoints: { name: string; [key: string]: number | string }[] = [];
+    for (let i = 0; i < MAX_HISTORY_LENGTH; i++) {
+      const dataPoint: { name: string; [key: string]: number | string } = { name: `Check ${i + 1}` };
+      endpoints.forEach((endpoint) => {
+        dataPoint[`${endpoint.name}`] = endpoint.errorRateHistory[i] || null;
+      });
+      dataPoints.push(dataPoint);
+    }
+    return dataPoints;
+  }, [endpoints]);
+
+  // Prepare all data keys for the single combined error rate chart legend and lines
+  const allErrorRateDataKeys = useMemo(() => {
+    const keys: string[] = [];
+    endpoints.forEach(endpoint => {
+      keys.push(`${endpoint.name}`);
+    });
+    return keys;
+  }, [endpoints]);
+
+  // Memoized data for the single combined CPU Usage graph
+  const combinedCpuUsageChartData = useMemo(() => {
+    const dataPoints: { name: string; [key: string]: number | string }[] = [];
+    for (let i = 0; i < MAX_HISTORY_LENGTH; i++) {
+      const dataPoint: { name: string; [key: string]: number | string } = { name: `Check ${i + 1}` };
+      endpoints.forEach((endpoint) => {
+        dataPoint[`${endpoint.name}`] = endpoint.cpuUsageHistory[i] || null;
+      });
+      dataPoints.push(dataPoint);
+    }
+    return dataPoints;
+  }, [endpoints]);
+
+  // Prepare all data keys for the single combined CPU usage chart legend and lines
+  const allCpuUsageDataKeys = useMemo(() => {
+    const keys: string[] = [];
+    endpoints.forEach(endpoint => {
+      keys.push(`${endpoint.name}`);
+    });
+    return keys;
+  }, [endpoints]);
+
 
   return (
     <ThemeProvider theme={theme}>
@@ -885,6 +913,150 @@ const App: React.FC = () => {
               {activeView === 'grid' && (
                 <OverallApiStatusGrid endpoints={endpoints} />
               )}
+
+              {/* Section for Consolidated API Latency Trends */}
+              {activeView === 'latency_charts' && (
+                <Card>
+                  <CardContent>
+                    <Typography variant="h5" gutterBottom>
+                      Consolidated API Latency Trends (Last {MAX_HISTORY_LENGTH} Checks)
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
+                      {/* Internal Latency Chart - All APIs */}
+                      <Box sx={{ flex: 1, minHeight: 350, maxHeight: 450, width: '100%' }}>
+                        <Typography variant="h6" align="center" gutterBottom>Internal Network Latency</Typography>
+                        <ResponsiveContainer width="100%" height="80%">
+                          <LineChart
+                            data={combinedLatencyChartData}
+                            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" />
+                            <YAxis label={{ value: 'Latency (ms)', angle: -90, position: 'insideLeft' }} />
+                            <RechartsTooltip />
+                            <Legend />
+                            {allLatencyDataKeys.filter(key => key.includes('(Internal)')).map((key, index) => (
+                              <Line
+                                key={key}
+                                type="monotone"
+                                dataKey={key}
+                                stroke={COLORS[index % COLORS.length]}
+                                strokeWidth={2}
+                                dot={{ r: 4 }}
+                                activeDot={{ r: 6 }}
+                                label={<CustomChartLabel />} // Use custom label component
+                              />
+                            ))}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </Box>
+
+                      {/* External Latency Chart - All APIs */}
+                      <Box sx={{ flex: 1, minHeight: 350, maxHeight: 450, width: '100%' }}>
+                        <Typography variant="h6" align="center" gutterBottom>External Network Latency</Typography>
+                        <ResponsiveContainer width="100%" height="80%">
+                          <LineChart
+                            data={combinedLatencyChartData}
+                            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" />
+                            <YAxis label={{ value: 'Latency (ms)', angle: -90, position: 'insideLeft' }} />
+                            <RechartsTooltip />
+                            <Legend />
+                            {allLatencyDataKeys.filter(key => key.includes('(External)')).map((key, index) => (
+                              <Line
+                                key={key}
+                                type="monotone"
+                                dataKey={key}
+                                stroke={COLORS[(index + endpoints.length) % COLORS.length]} // Offset colors for external to differentiate
+                                strokeWidth={2}
+                                dot={{ r: 4 }}
+                                activeDot={{ r: 6 }}
+                                label={<CustomChartLabel />} // Use custom label component
+                              />
+                            ))}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Section for Consolidated Error Rate and CPU Usage Trends */}
+              {activeView === 'error_cpu_charts' && (
+                <>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h5" gutterBottom>
+                        Consolidated Error Rate Trends (Last {MAX_HISTORY_LENGTH} Checks)
+                      </Typography>
+                      <Box sx={{ display: 'flex', justifyContent: 'center', minHeight: 350, maxHeight: 450, width: '100%' }}>
+                        <ResponsiveContainer width="95%" height="95%">
+                          <LineChart
+                            data={combinedErrorRateChartData}
+                            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" />
+                            <YAxis label={{ value: 'Error Rate (%)', angle: -90, position: 'insideLeft' }} />
+                            <RechartsTooltip />
+                            <Legend />
+                            {allErrorRateDataKeys.map((key, index) => (
+                              <Line
+                                key={key}
+                                type="monotone"
+                                dataKey={key}
+                                stroke={COLORS[index % COLORS.length]}
+                                strokeWidth={2}
+                                dot={{ r: 4 }}
+                                activeDot={{ r: 6 }}
+                                label={<CustomChartLabel />} // Use custom label component
+                              />
+                            ))}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </Box>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h5" gutterBottom>
+                        Consolidated CPU Usage Trends (Last {MAX_HISTORY_LENGTH} Checks)
+                      </Typography>
+                      <Box sx={{ display: 'flex', justifyContent: 'center', minHeight: 350, maxHeight: 450, width: '100%' }}>
+                        <ResponsiveContainer width="95%" height="95%">
+                          <LineChart
+                            data={combinedCpuUsageChartData}
+                            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" />
+                            <YAxis label={{ value: 'CPU Usage (%)', angle: -90, position: 'insideLeft' }} />
+                            <RechartsTooltip />
+                            <Legend />
+                            {allCpuUsageDataKeys.map((key, index) => (
+                              <Line
+                                key={key}
+                                type="monotone"
+                                dataKey={key}
+                                stroke={COLORS[(index + 2) % COLORS.length]} // Offset colors for CPU
+                                strokeWidth={2}
+                                dot={{ r: 4 }}
+                                activeDot={{ r: 6 }}
+                                label={<CustomChartLabel />} // Use custom label component
+                              />
+                            ))}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+
               {activeView === 'notifications' && (
                 <NotificationAlerting />
               )}
