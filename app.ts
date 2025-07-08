@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Container,
   Typography,
@@ -19,14 +19,18 @@ import {
   ThemeProvider,
   createTheme,
   CircularProgress,
-  Tooltip,
+  Tooltip, // This is Material-UI Tooltip
   Button,
   List,
   ListItem,
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  TextField, // Import TextField for DatePicker
+  TextField,
+  Select, // Added Select for server name filter
+  MenuItem, // Added MenuItem for Select options
+  FormControl, // Added FormControl for Select
+  InputLabel, // Added InputLabel for Select
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -44,9 +48,14 @@ import GridOnIcon from '@mui/icons-material/GridOn';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+// Recharts are still used for the MiniTrendGraph
+import {
+  AreaChart,
+  Area,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip, // Aliased Recharts Tooltip to avoid conflict
+} from 'recharts';
+import { blueGrey } from '@mui/material/colors';
 
 // Define a custom theme for a modern look and feel
 const theme = createTheme({
@@ -128,7 +137,7 @@ interface HistoryDataPoint {
 // Interface for a single API endpoint
 interface Endpoint {
   id: string;
-  name: string;
+  name: string; // Now includes method and path
   url: string;
   baselineLatency: number; // Expected normal latency in ms
   internalLatency: number | null; // Simulated latency from internal network
@@ -140,13 +149,11 @@ interface Endpoint {
   externalLatencyHistory: HistoryDataPoint[]; // Store a short history of external latencies with timestamps
   errorRate: number; // New: Percentage of errors (0-100)
   traffic: number; // New: Simulated requests per second (RPS)
-  cpuUsage: number; // New: Simulated CPU usage (0-100%)
-  memoryUsage: number; // New: Simulated Memory usage (0-100%)
   errorRateHistory: HistoryDataPoint[]; // New: Store history for error rate with timestamps
-  cpuUsageHistory: HistoryDataPoint[]; // New: Store history for CPU usage with timestamps
+  serverName: string; // New: Server name for the endpoint
 }
 
-const MAX_HISTORY_LENGTH = 10; // History length for the last 10 days
+const MAX_HISTORY_LENGTH = 20; // History length for the last 20 days
 
 // Helper function to generate initial dummy history data with timestamps
 const generateDummyHistory = (
@@ -168,96 +175,71 @@ const generateDummyHistory = (
   return history;
 };
 
+// Generate initial endpoints across multiple servers
+const generateInitialEndpoints = (): Endpoint[] => {
+  const endpoints: Endpoint[] = [];
+  const serverNames = ['Server Alpha', 'Server Beta', 'Server Gamma', 'Server Delta', 'Server Epsilon'];
+  const httpMethods = ['GET', 'POST', 'PUT', 'DELETE'];
+  const apiPaths = [
+    '/users/{id}',
+    '/products/search',
+    '/orders',
+    '/auth/login',
+    '/data/analytics',
+    '/swagger/swagger-ui.css',
+    '/swagger/swagger-ui-bundle.js',
+    '/api/v1/health',
+    '/payments/process',
+    '/notifications/send',
+    '/dtocr/legalparser', // Example from user's request
+    '/authentication/getbeartoken', // Example from user's request
+  ];
 
-// Dummy data for initial endpoints
-const initialEndpoints: Endpoint[] = [
-  {
-    id: '1',
-    name: 'User Service API',
-    url: 'https://api.example.com/users',
-    baselineLatency: 100,
-    internalLatency: null,
-    externalLatency: null,
-    internalHealth: 'Unknown',
-    externalHealth: 'Unknown',
-    lastChecked: null,
-    internalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 100, 20, 0.5, 10, 10),
-    externalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 120, 25, 0.5, 10, 10),
-    errorRate: 0,
-    traffic: 0,
-    cpuUsage: 0,
-    memoryUsage: 0,
-    errorRateHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 1, 1, 0.3, 0.5, 10),
-    cpuUsageHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 40, 10, 0.4, 5, 10),
-  },
-  {
-    id: '2',
-    name: 'Product Catalog API',
-    url: 'https://api.example.com/products',
-    baselineLatency: 150,
-    internalLatency: null,
-    externalLatency: null,
-    internalHealth: 'Unknown',
-    externalHealth: 'Unknown',
-    lastChecked: null,
-    internalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 150, 30, 0.6, 15, 10),
-    externalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 180, 35, 0.6, 15, 10),
-    errorRate: 0,
-    traffic: 0,
-    cpuUsage: 0,
-    memoryUsage: 0,
-    errorRateHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 2, 1.5, 0.2, 0.8, 10),
-    cpuUsageHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 50, 12, 0.5, 6, 10),
-  },
-  {
-    id: '3',
-    name: 'Payment Gateway API',
-    url: 'https://api.example.com/payments',
-    baselineLatency: 200,
-    internalLatency: null,
-    externalLatency: null,
-    internalHealth: 'Unknown',
-    externalHealth: 'Unknown',
-    lastChecked: null,
-    internalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 200, 40, 0.4, 20, 10),
-    externalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 220, 45, 0.4, 20, 10),
-    errorRate: 0,
-    traffic: 0,
-    cpuUsage: 0,
-    memoryUsage: 0,
-    errorRateHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 0.5, 0.8, 0.4, 0.3, 10),
-    cpuUsageHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 35, 8, 0.3, 4, 10),
-  },
-  {
-    id: '4',
-    name: 'Notification Service',
-    url: 'https://api.example.com/notifications',
-    baselineLatency: 80,
-    internalLatency: null,
-    externalLatency: null,
-    internalHealth: 'Unknown',
-    externalHealth: 'Unknown',
-    lastChecked: null,
-    internalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 80, 15, 0.7, 8, 10),
-    externalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 90, 18, 0.7, 8, 10),
-    errorRate: 0,
-    traffic: 0,
-    cpuUsage: 0,
-    memoryUsage: 0,
-    errorRateHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 0.1, 0.5, 0.5, 0.2, 10),
-    cpuUsageHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 25, 7, 0.6, 3, 10),
-  },
-];
+  let endpointIdCounter = 1;
+
+  serverNames.forEach(serverName => {
+    const numEndpoints = Math.floor(Math.random() * (8 - 4 + 1)) + 4; // 4 to 8 endpoints per server
+
+    for (let i = 0; i < numEndpoints; i++) {
+      const baseline = Math.floor(Math.random() * (250 - 50 + 1)) + 50; // Random baseline between 50 and 250ms
+      const randomMethod = httpMethods[Math.floor(Math.random() * httpMethods.length)];
+      const randomPath = apiPaths[Math.floor(Math.random() * apiPaths.length)];
+      
+      // Format the endpoint name as "METHOD /path/to/endpoint"
+      const endpointName = `${randomMethod} ${randomPath}`;
+
+      endpoints.push({
+        id: String(endpointIdCounter++),
+        name: endpointName,
+        url: `https://api.example.com/${serverName.toLowerCase().replace(' ', '-')}${randomPath}`,
+        baselineLatency: baseline,
+        internalLatency: null,
+        externalLatency: null,
+        internalHealth: 'Unknown',
+        externalHealth: 'Unknown',
+        lastChecked: null,
+        internalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, baseline, baseline * 0.2, 0.5, 10, MAX_HISTORY_LENGTH),
+        externalLatencyHistory: generateDummyHistory(MAX_HISTORY_LENGTH, baseline * 1.2, baseline * 0.25, 0.5, 10, MAX_HISTORY_LENGTH),
+        errorRate: 0,
+        traffic: 0,
+        errorRateHistory: generateDummyHistory(MAX_HISTORY_LENGTH, 1, 1, 0.3, 0.5, MAX_HISTORY_LENGTH),
+        serverName: serverName,
+      });
+    }
+  });
+  return endpoints;
+};
+
+const initialEndpoints: Endpoint[] = generateInitialEndpoints();
+
 
 // Helper function to simulate API call and determine health status based on latency
-const simulateApiCall = (baseline: number): { latency: number; health: 'Red' | 'Yellow' | 'Green'; errorRate: number; traffic: number; cpuUsage: number; memoryUsage: number } => {
+const simulateApiCall = (baseline: number): { latency: number; health: 'Red' | 'Yellow' | 'Green'; errorRate: number; traffic: number } => {
   const randomFactor = Math.random();
   let latency: number;
   let health: 'Red' | 'Yellow' | 'Green';
   let errorRate: number;
   let traffic: number;
-  let cpuUsage: number;
-  let memoryUsage: number;
 
   if (randomFactor < 0.7) {
     // Green: Latency within or slightly below baseline (80%-100% of baseline)
@@ -265,30 +247,24 @@ const simulateApiCall = (baseline: number): { latency: number; health: 'Red' | '
     health = 'Green';
     errorRate = Math.round(Math.random() * 2); // 0-2% error
     traffic = Math.round(50 + Math.random() * 100); // 50-150 RPS (normal)
-    cpuUsage = Math.round(20 + Math.random() * 30); // 20-50% CPU
-    memoryUsage = Math.round(30 + Math.random() * 40); // 30-70% Memory
   } else if (randomFactor < 0.9) {
     // Yellow: Latency 100-200% of baseline (degraded but not critical)
     latency = baseline * (1.0 + Math.random() * 1.0);
     health = 'Yellow';
     errorRate = Math.round(3 + Math.random() * 7); // 3-10% error
     traffic = Math.round(100 + Math.random() * 200); // 100-300 RPS (moderate to high)
-    cpuUsage = Math.round(50 + Math.random() * 30); // 50-80% CPU
-    memoryUsage = Math.round(60 + Math.random() * 30); // 60-90% Memory
   } else {
     // Red: Latency >200% of baseline (critical or very slow)
     latency = baseline * (2.0 + Math.random() * 2.0);
     health = 'Red';
     errorRate = Math.round(10 + Math.random() * 20); // 10-30% error
     traffic = Math.round(20 + Math.random() * 50); // 20-70 RPS (potentially low due to errors or very high burst, or very high traffic leading to issues)
-    cpuUsage = Math.round(80 + Math.random() * 15); // 80-95% CPU
-    memoryUsage = Math.round(85 + Math.random() * 10); // 85-95% Memory
   }
 
   // Add some slight extra randomness for more variability in latency
   latency += Math.random() * 20;
 
-  return { latency: Math.round(latency), health, errorRate, traffic, cpuUsage, memoryUsage };
+  return { latency: Math.round(latency), health, errorRate, traffic };
 };
 
 // Helper function to determine trend based on recent history
@@ -380,12 +356,12 @@ const LatencyBar: React.FC<LatencyBarProps> = ({ currentLatency, baselineLatency
 // Interface for the OverallApiStatusGrid component props
 interface OverallApiStatusGridProps {
   endpoints: Endpoint[];
-  startDate: Date | null; // Added startDate prop
-  endDate: Date | null;   // Added endDate prop
+  appliedStartDate: Date | null;
+  appliedEndDate: Date | null;
 }
 
-// OverallApiStatusGrid component to visualize overall API health, error rate, traffic, CPU, and Memory
-const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints, startDate, endDate }) => {
+// OverallApiStatusGrid component to visualize overall API health, error rate, traffic
+const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints, appliedStartDate, appliedEndDate }) => {
   // Helper to determine the single overall health for an endpoint
   const getOverallHealth = (endpoint: Endpoint): 'Red' | 'Yellow' | 'Green' | 'Unknown' => {
     if (endpoint.internalHealth === 'Red' || endpoint.externalHealth === 'Red') {
@@ -412,13 +388,6 @@ const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints, 
     return theme.palette.success.main; // Normal traffic
   };
 
-  // Helper to get CPU/Memory usage color
-  const getResourceUsageColor = (usage: number) => {
-    if (usage > 85) return theme.palette.error.main; // High usage
-    if (usage > 60) return theme.palette.warning.main; // Moderate usage
-    return theme.palette.success.main; // Normal usage
-  };
-
   // Helper to calculate average from history based on date range
   const calculateAverage = (history: HistoryDataPoint[], startDate: Date | null, endDate: Date | null) => {
     let filteredHistory = history;
@@ -443,25 +412,19 @@ const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints, 
     <Card>
       <CardContent>
         <Typography variant="h5" gutterBottom>
-          API Health Overview (Error Rate, Traffic, CPU & Memory)
+          API Health Overview (Error Rate, Traffic)
         </Typography>
         <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
           <Table aria-label="api status grid table">
             <TableHead>
               <TableRow>
-                <TableCell>Endpoint Name</TableCell>
-                <TableCell align="center">Overall Health</TableCell>
-                <TableCell align="right">Current Error Rate (%)</TableCell>
-                <TableCell align="right">Avg Error Rate (%)</TableCell>
-                <TableCell align="right">Traffic (RPS)</TableCell>
-                <TableCell align="right">Current CPU Usage (%)</TableCell>
-                <TableCell align="right">Avg CPU Usage (%)</TableCell>
-                <TableCell align="right">Current Memory Usage (%)</TableCell>
+                <TableCell>Server Name</TableCell><TableCell>Endpoint Name</TableCell><TableCell align="center">Overall Health</TableCell><TableCell align="right">Current Error Rate (%)</TableCell><TableCell align="right">Avg Error Rate (%)</TableCell><TableCell align="right">Traffic (RPS)</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {endpoints.map((endpoint) => (
                 <TableRow key={endpoint.id}>
+                  <TableCell>{endpoint.serverName}</TableCell>
                   <TableCell component="th" scope="row">
                     {endpoint.name}
                   </TableCell>
@@ -480,19 +443,10 @@ const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints, 
                     {endpoint.errorRate}%
                   </TableCell>
                   <TableCell align="right">
-                    {calculateAverage(endpoint.errorRateHistory, startDate, endDate)}
+                    {calculateAverage(endpoint.errorRateHistory, appliedStartDate, appliedEndDate)}
                   </TableCell>
                   <TableCell align="right" sx={{ color: getTrafficColor(endpoint.traffic), fontWeight: 500 }}>
                     {endpoint.traffic}
-                  </TableCell>
-                  <TableCell align="right" sx={{ color: getResourceUsageColor(endpoint.cpuUsage), fontWeight: 500 }}>
-                    {endpoint.cpuUsage}%
-                  </TableCell>
-                  <TableCell align="right">
-                    {calculateAverage(endpoint.cpuUsageHistory, startDate, endDate)}
-                  </TableCell>
-                  <TableCell align="right" sx={{ color: getResourceUsageColor(endpoint.memoryUsage), fontWeight: 500 }}>
-                    {endpoint.memoryUsage}%
                   </TableCell>
                 </TableRow>
               ))}
@@ -536,15 +490,15 @@ const OverallSummaryStatus: React.FC<{ totalEndpoints: number; healthyEndpoints:
   </Card>
 );
 
-const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatusProps: Function; getTrendIcon: Function; startDate: Date | null; endDate: Date | null }> = ({ endpoints, getStatusProps, getTrendIcon, startDate, endDate }) => {
+const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatusProps: Function; getTrendIcon: Function; appliedStartDate: Date | null; appliedEndDate: Date | null }> = ({ endpoints, getStatusProps, getTrendIcon, appliedStartDate, appliedEndDate }) => {
   // Filter endpoints based on the last checked date within the selected range
   const filteredEndpoints = useMemo(() => {
-    if (!startDate || !endDate) {
+    if (!appliedStartDate || !appliedEndDate) {
       return endpoints;
     }
-    const start = new Date(startDate);
+    const start = new Date(appliedStartDate);
     start.setHours(0, 0, 0, 0);
-    const end = new Date(endDate);
+    const end = new Date(appliedEndDate);
     end.setHours(23, 59, 59, 999);
 
     return endpoints.filter(endpoint =>
@@ -552,7 +506,7 @@ const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatus
       endpoint.lastChecked.getTime() >= start.getTime() &&
       endpoint.lastChecked.getTime() <= end.getTime()
     );
-  }, [endpoints, startDate, endDate]);
+  }, [endpoints, appliedStartDate, appliedEndDate]);
 
   return (
     <Card>
@@ -564,14 +518,7 @@ const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatus
           <Table stickyHeader aria-label="endpoint health table">
             <TableHead>
               <TableRow>
-                <TableCell sx={{ minWidth: '150px' }}>Endpoint Name</TableCell>
-                <TableCell sx={{ minWidth: '200px' }}>URL</TableCell>
-                <TableCell align="center">Internal Health</TableCell>
-                <TableCell align="center">External Health</TableCell>
-                <TableCell align="right" sx={{ minWidth: '120px' }}>Internal Latency (ms)</TableCell>
-                <TableCell align="right" sx={{ minWidth: '120px' }}>External Latency (ms)</TableCell>
-                <TableCell align="right" sx={{ minWidth: '80px' }}>Baseline (ms)</TableCell>
-                <TableCell align="center" sx={{ minWidth: '100px' }}>Last Checked</TableCell>
+                <TableCell sx={{ minWidth: '150px' }}>Endpoint Name</TableCell><TableCell sx={{ minWidth: '200px' }}>URL</TableCell><TableCell align="center">Internal Health</TableCell><TableCell align="center">External Health</TableCell><TableCell align="right" sx={{ minWidth: '120px' }}>Internal Latency (ms)</TableCell><TableCell align="right" sx={{ minWidth: '120px' }}>External Latency (ms)</TableCell><TableCell align="right" sx={{ minWidth: '80px' }}>Baseline (ms)</TableCell><TableCell align="center" sx={{ minWidth: '100px' }}>Last Checked</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -700,10 +647,10 @@ interface SidebarNavProps {
 
 const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView }) => {
   const navItems = [
-    { id: 'summary', text: 'Overall Summary', icon: <DashboardIcon /> },
     { id: 'table', text: 'Endpoint Table', icon: <TableChartIcon /> },
     { id: 'grid', text: 'API Status Grid', icon: <GridOnIcon /> },
-    { id: 'error_cpu_charts', text: 'Error/CPU Trends', icon: <DeveloperBoardIcon /> },
+    { id: 'error_trends', text: 'Error Trends', icon: <DeveloperBoardIcon /> }, // Updated text
+    { id: 'summary', text: 'Overall Summary', icon: <DashboardIcon /> },
     { id: 'notifications', text: 'Notifications', icon: <NotificationsIcon /> },
     { id: 'selfHealing', text: 'Self-Healing', icon: <AutoFixHighIcon /> },
   ];
@@ -733,180 +680,259 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView }) => 
   );
 };
 
-const COLORS = [
-  '#8884d8', '#82ca9d', '#ffc658', '#d0ed57', '#a4de6c',
-  '#00c49f', '#ffbb28', '#FF8042', '#AF19FF', '#FF19A3',
-  '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'
-];
-// MAX_HISTORY_LENGTH is defined at the top of the file
-
 // Custom Mini Trend Graph component
 interface MiniTrendGraphProps {
   history: HistoryDataPoint[]; // Updated to use HistoryDataPoint[]
   label: string;
   unit: string;
-  color: string;
-  startDate: Date | null;
-  endDate: Date | null;
+  color: string; // Keep this for the line color
+  appliedStartDate: Date | null;
+  appliedEndDate: Date | null;
 }
 
-const MiniTrendGraph: React.FC<MiniTrendGraphProps> = ({ history, label, unit, color, startDate, endDate }) => {
+const MiniTrendGraph: React.FC<MiniTrendGraphProps> = ({ history, label, unit, color, appliedStartDate, appliedEndDate }) => {
   // Filter history based on selected date range
   const filteredHistory = useMemo(() => {
-    if (!startDate || !endDate) {
-      return history; // If no date range selected, show full history
+    if (!appliedStartDate || !appliedEndDate) {
+      return history; // If no date range applied, show full history
     }
     // Set hours to start and end of day for accurate filtering
-    const start = new Date(startDate);
+    const start = new Date(appliedStartDate);
     start.setHours(0, 0, 0, 0);
-    const end = new Date(endDate);
+    const end = new Date(appliedEndDate);
     end.setHours(23, 59, 59, 999);
 
     return history.filter(point =>
       point.timestamp.getTime() >= start.getTime() &&
       point.timestamp.getTime() <= end.getTime()
     );
-  }, [history, startDate, endDate]);
+  }, [history, appliedStartDate, appliedEndDate]);
 
   if (filteredHistory.length === 0) {
+    console.log(`MiniTrendGraph: No data available for ${label} within selected date range.`); // Debugging log
     return (
-      <Box sx={{ width: '100%', height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', border: '1px solid #eee', borderRadius: 2, bgcolor: '#fff' }}>
-        No data available for {label} trend in this range.
+      <Box sx={{ width: '100%', height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', border: '1px dashed', borderColor: 'grey.400', borderRadius: 2, p: 2 }}>
+        <Typography variant="body2">No data available for selected date range.</Typography>
       </Box>
     );
   }
 
-  // Normalize data for visual representation
-  const values = filteredHistory.map(point => point.value);
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
-  const range = maxValue - minValue;
+  // Format data for Recharts: convert timestamp to a readable string for XAxis
+  const chartData = filteredHistory.map(point => ({
+    value: point.value,
+    date: point.timestamp.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }), // Use 'date' as the dataKey for XAxis
+    fullDate: point.timestamp.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }), // Added fullDate for tooltip
+  }));
 
   return (
-    <Box sx={{ width: '100%', height: 100, display: 'flex', flexDirection: 'column', p: 1, border: '1px solid #eee', borderRadius: 2, bgcolor: '#fff' }}>
-      <Typography variant="caption" color="textSecondary" sx={{ mb: 0.5 }}>
-        {label} Trend ({unit})
-      </Typography>
-      <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'flex-end', gap: '1px', overflow: 'hidden' }}>
-        {filteredHistory.map((point, index) => {
-          const normalizedHeight = range > 0 ? ((point.value - minValue) / range) * 80 + 10 : 50; // Scale to 10-90% of 100px height
-          return (
-            <Tooltip key={index} title={`${label}: ${point.value.toFixed(1)}${unit} at ${point.timestamp.toLocaleDateString()} ${point.timestamp.toLocaleTimeString()}`}>
-              <Box
-                sx={{
-                  width: `${100 / filteredHistory.length}%`, // Distribute width evenly based on filtered data
-                  height: `${normalizedHeight}%`,
-                  backgroundColor: color,
-                  borderRadius: '2px',
-                  transition: 'height 0.3s ease-out',
-                  minWidth: '2px', // Ensure bars are visible even with many data points
-                }}
-              />
-            </Tooltip>
-          );
-        })}
-      </Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-        <Typography variant="caption" color="textSecondary">Min: {minValue.toFixed(1)}{unit}</Typography>
-        <Typography variant="caption" color="textSecondary">Max: {maxValue.toFixed(1)}{unit}</Typography>
-      </Box>
+    <Box sx={{ width: '100%', height: 100 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
+          <defs>
+            <linearGradient id={`color${label}`} x1="0" y1="0" x2="0" y2="1">
+              {/* Use the 'color' prop for the line, and theme.palette.grey[300] for the fill */}
+              <stop offset="5%" stopColor={color} stopOpacity={0.8}/>
+              <stop offset="95%" stopColor={theme.palette.grey[300]} stopOpacity={0}/>
+            </linearGradient>
+          </defs>
+          <RechartsTooltip // Using the aliased RechartsTooltip
+            labelFormatter={(labelValue, payload) => {
+              // The labelValue here is the 'date' property from chartData
+              // The payload contains the full data point, including 'fullDate'
+              if (payload && payload.length > 0 && payload[0].payload && payload[0].payload.fullDate) {
+                return `Date: ${payload[0].payload.fullDate}`;
+              }
+              return `Date: ${labelValue}`; // Fallback
+            }}
+            formatter={(value) => [`${value} ${unit}`, label]}
+          />
+          {/* Use the 'color' prop for the stroke, and the gradient for the fill */}
+          <Area type="monotone" dataKey="value" stroke={color} fillOpacity={1} fill="#607d8b" strokeWidth={2} dot={false} />
+          {/* XAxis is hidden for mini graphs but can be useful for debugging */}
+          {/* <XAxis dataKey="date" hide /> */}
+          {/* YAxis is hidden for mini graphs */}
+          {/* <YAxis hide /> */}
+        </AreaChart>
+      </ResponsiveContainer>
     </Box>
+  );
+};
+
+// Component for Error Rate Trends
+interface ErrorTrendsProps {
+  endpoints: Endpoint[];
+  appliedStartDate: Date | null;
+  appliedEndDate: Date | null;
+}
+
+const ErrorTrends: React.FC<ErrorTrendsProps> = ({ endpoints, appliedStartDate, appliedEndDate }) => {
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h5" gutterBottom>
+          Error Rate Trends
+        </Typography>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 2 }}>
+          {endpoints.map((endpoint, index) => (
+            <Card key={endpoint.id} variant="outlined" sx={{ borderRadius: 2 }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 1 }}>{endpoint.name}</Typography>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" color="textSecondary">Error Rate Trend ({endpoint.errorRate}%)</Typography>
+                  <MiniTrendGraph
+                    history={endpoint.errorRateHistory}
+                    label="Error Rate"
+                    unit="%"
+                    color={theme.palette.primary.main} // Navy blue line
+                    appliedStartDate={appliedStartDate}
+                    appliedEndDate={appliedEndDate}
+                  />
+                </Box>
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
+      </CardContent>
+    </Card>
   );
 };
 
 
 const App: React.FC = () => {
+  // State for date range (now storing as string for TextField compatibility)
+  const [startDateString, setStartDateString] = useState<string>('');
+  const [endDateString, setEndDateString] = useState<string>('');
+  // State for server name filter
+  const [serverNameFilter, setServerNameFilter] = useState<string>('');
+
+
+  // States for applied date range (used for filtering)
+  const [appliedStartDate, setAppliedStartDate] = useState<Date | null>(null);
+  const [appliedEndDate, setAppliedEndDate] = useState<Date | null>(null);
+  // State for applied server name filter
+  const [appliedServerNameFilter, setAppliedServerNameFilter] = useState<string>('');
+
+
+  // State for live endpoint data, continuously updated
   const [endpoints, setEndpoints] = useState<Endpoint[]>(initialEndpoints);
-  const [loading, setLoading] = useState<boolean>(true);
+
+  // State to hold the snapshot of endpoints used for trends when filter is applied
+  const [displayedEndpoints, setDisplayedEndpoints] = useState<Endpoint[]>(() => {
+    // Initialize displayedEndpoints with a snapshot of initialEndpoints' histories
+    return initialEndpoints.map(endpoint => ({
+      ...endpoint,
+      internalLatencyHistory: [...endpoint.internalLatencyHistory],
+      externalLatencyHistory: [...endpoint.externalLatencyHistory],
+      errorRateHistory: [...endpoint.errorRateHistory],
+    }));
+  });
+
+  // State for active view in the sidebar navigation
+  const [activeView, setActiveView] = useState<string>('summary'); // Default view
+
+
+  // useRef for the interval ID
   const intervalRef = useRef<number | null>(null);
-  const [activeView, setActiveView] = useState<string>('summary');
 
-  // State for date range filters, initialized to the last 10 days
-  const [startDate, setStartDate] = useState<Date | null>(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000));
-  const [endDate, setEndDate] = useState<Date | null>(new Date());
+  // Get unique server names for the filter dropdown
+  const uniqueServerNames = useMemo(() => {
+    const names = new Set<string>();
+    initialEndpoints.forEach(endpoint => names.add(endpoint.serverName));
+    return Array.from(names).sort();
+  }, []);
 
-  const getStatusProps = (health: 'Red' | 'Yellow' | 'Green' | 'Unknown') => {
-    switch (health) {
-      case 'Green':
-        return { color: 'success' as const, label: 'Healthy', icon: <CheckCircleOutlineIcon fontSize="small" /> };
-      case 'Yellow':
-        return { color: 'warning' as const, label: 'Degraded', icon: <WarningAmberIcon fontSize="small" /> };
-      case 'Red':
-        return { color: 'error' as const, label: 'Critical', icon: <ErrorOutlineIcon fontSize="small" /> };
-      default:
-        return { color: 'default' as const, label: 'Unknown', icon: <CircularProgress size={16} /> };
-    }
-  };
 
-  const getTrendIcon = (trend: 'improving' | 'degrading' | 'stable' | 'unknown') => {
-    switch (trend) {
-      case 'improving':
-        return (
-          <Tooltip title="Latency Improving">
-            <ArrowDownwardIcon color="success" fontSize="small" sx={{ ml: 0.5 }} />
-          </Tooltip>
-        );
-      case 'degrading':
-        return (
-          <Tooltip title="Latency Degrading">
-            <ArrowUpwardIcon color="error" fontSize="small" sx={{ ml: 0.5 }} />
-          </Tooltip>
-        );
-      case 'stable':
-        return (
-          <Tooltip title="Latency Stable">
-            <HorizontalRuleIcon color="action" fontSize="small" sx={{ ml: 0.5 }} />
-          </Tooltip>
-        );
-      default:
-        return null;
-    }
-  };
+  // Function to update endpoint data
+  const updateEndpointData = useCallback(() => {
+    setEndpoints((prevEndpoints) =>
+      prevEndpoints.map((endpoint) => {
+        const internalSim = simulateApiCall(endpoint.baselineLatency);
+        const externalSim = simulateApiCall(endpoint.baselineLatency * 1.2); // External usually higher
 
-  const updateEndpointStatus = () => {
-    setLoading(true);
-    const updatedEndpoints = endpoints.map((endpoint) => {
-      const { latency: internalLatency, health: internalHealth, errorRate, traffic, cpuUsage, memoryUsage } = simulateApiCall(endpoint.baselineLatency);
-      const { latency: externalLatency, health: externalHealth } = simulateApiCall(endpoint.baselineLatency);
+        // Update history, keeping only the last MAX_HISTORY_LENGTH entries
+        const newInternalLatencyHistory = [...endpoint.internalLatencyHistory, { value: internalSim.latency, timestamp: new Date() }].slice(-MAX_HISTORY_LENGTH);
+        const newExternalLatencyHistory = [...endpoint.externalLatencyHistory, { value: externalSim.latency, timestamp: new Date() }].slice(-MAX_HISTORY_LENGTH);
+        const newErrorRateHistory = [...endpoint.errorRateHistory, { value: internalSim.errorRate, timestamp: new Date() }].slice(-MAX_HISTORY_LENGTH);
 
-      const now = new Date(); // Get current timestamp for new data points
+        return {
+          ...endpoint,
+          internalLatency: internalSim.latency,
+          externalLatency: externalSim.latency, // Corrected to externalSim.latency
+          internalHealth: internalSim.health,
+          externalHealth: externalSim.health,
+          errorRate: internalSim.errorRate,
+          traffic: internalSim.traffic,
+          lastChecked: new Date(),
+          internalLatencyHistory: newInternalLatencyHistory,
+          externalLatencyHistory: newExternalLatencyHistory,
+          errorRateHistory: newErrorRateHistory,
+        };
+      })
+    );
+  }, []);
 
-      const newInternalLatencyHistory = [...endpoint.internalLatencyHistory, { value: internalLatency, timestamp: now }].slice(-MAX_HISTORY_LENGTH);
-      const newExternalLatencyHistory = [...endpoint.externalLatencyHistory, { value: externalLatency, timestamp: now }].slice(-MAX_HISTORY_LENGTH);
-      const newErrorRateHistory = [...endpoint.errorRateHistory, { value: errorRate, timestamp: now }].slice(-MAX_HISTORY_LENGTH);
-      const newCpuUsageHistory = [...endpoint.cpuUsageHistory, { value: cpuUsage, timestamp: now }].slice(-MAX_HISTORY_LENGTH);
-
-      return {
-        ...endpoint,
-        internalLatency,
-        internalHealth,
-        externalLatency,
-        externalHealth,
-        lastChecked: now, // Update lastChecked to current timestamp
-        internalLatencyHistory: newInternalLatencyHistory,
-        externalLatencyHistory: newExternalLatencyHistory,
-        errorRate,
-        traffic,
-        cpuUsage,
-        memoryUsage,
-        errorRateHistory: newErrorRateHistory,
-        cpuUsageHistory: newCpuUsageHistory,
-      };
-    });
-    setEndpoints(updatedEndpoints);
-    setTimeout(() => setLoading(false), 500);
-  };
-
+  // Set up interval for data updates (for live metrics and history accumulation)
   useEffect(() => {
-    updateEndpointStatus();
-    intervalRef.current = window.setInterval(updateEndpointStatus, 15000);
+    console.log("App component mounted. Starting data updates."); // Debugging log
+    // Initial data load
+    updateEndpointData();
+
+    // Set interval to update data every 5 seconds
+    intervalRef.current = window.setInterval(updateEndpointData, 5000); // Re-enabled interval
+
+    // Clean up interval on component unmount
     return () => {
+      console.log("App component unmounted. Clearing data update interval."); // Debugging log
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, []);
+  }, [updateEndpointData]);
 
+
+  // Handler for "Apply Filter" button
+  const handleApplyFilter = () => {
+    const newStartDate = startDateString ? new Date(startDateString) : null;
+    const newEndDate = endDateString ? new Date(endDateString) : null;
+
+    setAppliedStartDate(newStartDate);
+    setAppliedEndDate(newEndDate);
+    setAppliedServerNameFilter(serverNameFilter); // Apply server name filter
+
+    // Create a snapshot of the current 'endpoints' data to be used for trends
+    // Filter by server name before creating the snapshot
+    const filteredByServer = endpoints.filter(endpoint =>
+      serverNameFilter === '' || endpoint.serverName === serverNameFilter
+    );
+
+    setDisplayedEndpoints(filteredByServer.map(endpoint => ({
+      ...endpoint,
+      internalLatencyHistory: [...endpoint.internalLatencyHistory],
+      externalLatencyHistory: [...endpoint.externalLatencyHistory],
+      errorRateHistory: [...endpoint.errorRateHistory],
+    })));
+  };
+
+  // Handler for "Clear Dates" button
+  const handleClearDates = () => {
+    setStartDateString('');
+    setEndDateString('');
+    setServerNameFilter(''); // Clear server name filter
+    setAppliedStartDate(null);
+    setAppliedEndDate(null);
+    setAppliedServerNameFilter(''); // Clear applied server name filter
+
+    // When dates are cleared, revert displayed trends to a snapshot of the current full history (no server filter)
+    setDisplayedEndpoints(endpoints.map(endpoint => ({
+      ...endpoint,
+      internalLatencyHistory: [...endpoint.internalLatencyHistory],
+      externalLatencyHistory: [...endpoint.externalLatencyHistory],
+      errorRateHistory: [...endpoint.errorRateHistory],
+    })));
+  };
+
+  // Calculate overall status
+  // These calculations should ideally use the 'endpoints' (live data), not 'displayedEndpoints'
   const totalEndpoints = endpoints.length;
   const healthyEndpoints = endpoints.filter(
     (ep) => ep.internalHealth === 'Green' && ep.externalHealth === 'Green'
@@ -918,136 +944,144 @@ const App: React.FC = () => {
     (ep) => ep.internalHealth === 'Red' || ep.externalHealth === 'Red'
   ).length;
 
-  let overallStatus: 'Operational' | 'Degraded' | 'Critical' = 'Operational';
+  let overallStatus = 'Operational';
   if (redEndpoints > 0) {
     overallStatus = 'Critical';
   } else if (yellowEndpoints > 0) {
     overallStatus = 'Degraded';
   }
 
-  // Function to handle filtering (re-renders charts based on new date range)
-  const handleFilterHistory = () => {
-    // A shallow copy is enough to trigger re-render for memoized components
-    setEndpoints([...endpoints]);
+  // Helper to get Chip props based on health status
+  const getStatusProps = (health: 'Red' | 'Yellow' | 'Green' | 'Unknown') => {
+    switch (health) {
+      case 'Green':
+        return { label: 'Healthy', color: 'success', icon: <CheckCircleOutlineIcon /> };
+      case 'Yellow':
+        return { label: 'Degraded', color: 'warning', icon: <WarningAmberIcon /> };
+      case 'Red':
+        return { label: 'Critical', color: 'error', icon: <ErrorOutlineIcon /> };
+      default:
+        return { label: 'Unknown', color: 'default', icon: <HorizontalRuleIcon /> };
+    }
+  };
+
+  // Helper to get trend icon
+  const getTrendIcon = (trend: 'improving' | 'degrading' | 'stable' | 'unknown') => {
+    switch (trend) {
+      case 'improving':
+        return <Tooltip title="Improving"><ArrowUpwardIcon color="success" fontSize="small" /></Tooltip>;
+      case 'degrading':
+        return <Tooltip title="Degrading"><ArrowDownwardIcon color="error" fontSize="small" /></Tooltip>;
+      case 'stable':
+        return <Tooltip title="Stable"><HorizontalRuleIcon color="action" fontSize="small" /></Tooltip>;
+      default:
+        return <Tooltip title="Unknown Trend"><HorizontalRuleIcon color="disabled" fontSize="small" /></Tooltip>;
+    }
   };
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Box sx={{ display: 'flex', height: '100vh', bgcolor: 'background.default' }}>
-          {/* Left Vertical Navigation */}
-          <SidebarNav onSelectView={setActiveView} activeView={activeView} />
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
+        <SidebarNav onSelectView={setActiveView} activeView={activeView} />
+        <Container component="main" maxWidth="xl" sx={{ flexGrow: 1, p: 3 }}>
+          <Typography variant="h4" gutterBottom sx={{ mb: 4 }}>
+            API Monitoring Dashboard
+          </Typography>
 
-          {/* Main Content Area */}
-          <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, overflowY: 'auto' }}>
-            <Typography variant="h4" component="h1" gutterBottom align="center" sx={{ mb: 4, color: theme.palette.primary.main }}>
-              API Performance Monitoring Dashboard
-            </Typography>
-
-            {/* Date Range Filters and Filter Button */}
-            <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
-                <DatePicker
-                label="From Date"
-                value={startDate}
-                onChange={(newValue) => setStartDate(newValue)}
-                slotProps={{ textField: { size: "small" } }}
-              />
-              <DatePicker
-                label="To Date"
-                value={endDate}
-                onChange={(newValue) => setEndDate(newValue)}
-                slotProps={{ textField: { size: "small" } }}
-              />
-              <Button
-                variant="contained"
-                onClick={handleFilterHistory}
-                sx={{ height: '40px' }}
+          <Box sx={{ display: 'flex', gap: 2, mb: 4, alignItems: 'flex-end' }}>
+            <TextField
+              label="Start Date"
+              type="date"
+              value={startDateString}
+              onChange={(e) => setStartDateString(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ minWidth: 200 }}
+            />
+            <TextField
+              label="End Date"
+              type="date"
+              value={endDateString}
+              onChange={(e) => setEndDateString(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ minWidth: 200 }}
+            />
+            <FormControl sx={{ minWidth: 200 }}>
+              <InputLabel id="server-name-select-label">Server Name</InputLabel>
+              <Select
+                labelId="server-name-select-label"
+                id="server-name-select"
+                value={serverNameFilter}
+                label="Server Name"
+                onChange={(e) => setServerNameFilter(e.target.value as string)}
               >
-                Filter History
-              </Button>
-            </Box>
+                <MenuItem value=""><em>All Servers</em></MenuItem>
+                {uniqueServerNames.map((name) => (
+                  <MenuItem key={name} value={name}>{name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button
+              variant="contained"
+              onClick={handleApplyFilter}
+              disabled={!startDateString && !endDateString && !serverNameFilter}
+              sx={{ height: 56 }}
+            >
+              Apply Filter
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={handleClearDates}
+              disabled={!startDateString && !endDateString && !appliedStartDate && !appliedEndDate && !serverNameFilter}
+              sx={{ height: 56 }}
+            >
+              Clear Dates
+            </Button>
+          </Box>
 
-            {loading && (
-              <Box display="flex" justifyContent="center" alignItems="center" height="50vh" flexDirection="column">
-                <CircularProgress size={60} sx={{ mb: 2 }} />
-                <Typography variant="h6">Simulating API Checks...</Typography>
-                <Typography variant="body2" color="textSecondary">Updates every 15 seconds</Typography>
-              </Box>
-            )}
+          {activeView === 'summary' && (
+            <OverallSummaryStatus
+              totalEndpoints={totalEndpoints}
+              healthyEndpoints={healthyEndpoints}
+              yellowEndpoints={yellowEndpoints}
+              redEndpoints={redEndpoints}
+              overallStatus={overallStatus}
+            />
+          )}
 
-            {!loading && (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {activeView === 'summary' && (
-                  <OverallSummaryStatus
-                    totalEndpoints={totalEndpoints}
-                    healthyEndpoints={healthyEndpoints}
-                    yellowEndpoints={yellowEndpoints}
-                    redEndpoints={redEndpoints}
-                    overallStatus={overallStatus}
-                  />
-                )}
-                {activeView === 'table' && (
-                  <IndividualEndpointStatusTable
-                    endpoints={endpoints}
-                    getStatusProps={getStatusProps}
-                    getTrendIcon={getTrendIcon}
-                    startDate={startDate} // Pass startDate to table
-                    endDate={endDate}     // Pass endDate to table
-                  />
-                )}
-                {activeView === 'grid' && (
-                  <OverallApiStatusGrid endpoints={endpoints} startDate={startDate} endDate={endDate} />
-                )}
+          {activeView === 'table' && (
+            <IndividualEndpointStatusTable
+              endpoints={displayedEndpoints}
+              getStatusProps={getStatusProps}
+              getTrendIcon={getTrendIcon}
+              appliedStartDate={appliedStartDate}
+              appliedEndDate={appliedEndDate}
+            />
+          )}
 
-                {activeView === 'error_cpu_charts' && (
-                  <>
-                    <Typography variant="h5" gutterBottom sx={{ mt: 2 }}>
-                      Endpoint Error Rate & CPU Usage Trends (Last {MAX_HISTORY_LENGTH} Days)
-                    </Typography>
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
-                      {endpoints.map((endpoint) => (
-                        <Card key={endpoint.id}>
-                          <CardContent>
-                            <Typography variant="h6" gutterBottom>{endpoint.name}</Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              <MiniTrendGraph
-                                history={endpoint.errorRateHistory}
-                                label="Error Rate"
-                                unit="%"
-                                color={theme.palette.error.main}
-                                startDate={startDate}
-                                endDate={endDate}
-                              />
-                              <MiniTrendGraph
-                                history={endpoint.cpuUsageHistory}
-                                label="CPU Usage"
-                                unit="%"
-                                color={theme.palette.primary.main}
-                                startDate={startDate}
-                                endDate={endDate}
-                              />
-                            </Box>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </Box>
-                  </>
-                )}
+          {activeView === 'grid' && (
+            <OverallApiStatusGrid
+              endpoints={displayedEndpoints}
+              appliedStartDate={appliedStartDate}
+              appliedEndDate={appliedEndDate}
+            />
+          )}
 
-                {activeView === 'notifications' && (
-                  <NotificationAlerting />
-                )}
-                {activeView === 'selfHealing' && (
-                  <AutomatedSelfHealingActions />
-                )}
-              </Box>
-            )}
-          </Container>
-        </Box>
-      </ThemeProvider>
-    </LocalizationProvider>
+          {activeView === 'error_trends' && (
+            <ErrorTrends
+              endpoints={displayedEndpoints}
+              appliedStartDate={appliedStartDate}
+              appliedEndDate={appliedEndDate}
+            />
+          )}
+
+          {activeView === 'notifications' && <NotificationAlerting />}
+
+          {activeView === 'selfHealing' && <AutomatedSelfHealingActions />}
+        </Container>
+      </Box>
+    </ThemeProvider>
   );
 };
-// Export the App component as default
+
 export default App;
