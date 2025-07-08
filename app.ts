@@ -1049,5 +1049,5 @@ const App: React.FC = () => {
     </LocalizationProvider>
   );
 };
-
+// Export the App component as default
 export default App;
