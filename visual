@@ -32,6 +32,7 @@ import {
   FormControl,
   InputLabel,
   IconButton,
+  Grid, // Added for grid layout
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -45,11 +46,11 @@ import MemoryIcon from '@mui/icons-material/Memory';
 import DeveloperBoardIcon from '@mui/icons-material/DeveloperBoard';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import TableChartIcon from '@mui/icons-material/TableChart';
-import GridOnIcon from '@mui/icons-material/GridOn';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
-// Corrected imports for Brightness icons
+import PersonIcon from '@mui/icons-material/Person'; // Import User Profile Icon
 import { Brightness4 as Brightness4Icon, Brightness7 as Brightness7Icon } from '@mui/icons-material';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday'; // For date picker icon
 
 
 import {
@@ -57,8 +58,11 @@ import {
   Area,
   ResponsiveContainer,
   Tooltip as RechartsTooltip,
+  XAxis, // Added for Recharts
+  YAxis, // Added for Recharts
 } from 'recharts';
 import { blueGrey } from '@mui/material/colors';
+
 
 // Define the light theme
 const lightTheme = createTheme({
@@ -201,6 +205,22 @@ const darkTheme = createTheme({
         },
       },
     },
+    // START: Added for date picker icon color in dark theme
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          color: '#ffffff', // Set icon color to white
+        },
+      },
+    },
+    MuiInputAdornment: {
+      styleOverrides: {
+        root: {
+          color: '#ffffff', // Ensure adornment content is white
+        },
+      },
+    },
+    // END: Added for date picker icon color in dark theme
   },
 });
 
@@ -223,10 +243,11 @@ interface Endpoint {
   lastChecked: Date | null; // This will be a fixed historical date for filtering the table rows
   internalLatencyHistory: HistoryDataPoint[];
   externalLatencyHistory: HistoryDataPoint[];
-  errorRate: number;
+  errorRate: number; // Changed from percentage to count
   traffic: number;
   errorRateHistory: HistoryDataPoint[];
   serverName: string;
+  projectName: string; // Added projectName to Endpoint interface
 }
 
 const MAX_HISTORY_POINTS = 60; // Number of data points to keep in history for trends
@@ -257,7 +278,9 @@ const generateDummyHistory = (
 // Generate initial endpoints across multiple servers
 const generateInitialEndpoints = (): Endpoint[] => {
   const endpoints: Endpoint[] = [];
-  const serverNames = ['Server Alpha', 'Server Beta', 'Server Gamma', 'Server Delta', 'Server Epsilon'];
+  const projectNames = ['Project Alpha', 'Project Beta', 'Project Gamma', 'Project Delta']; // 4 Projects
+  const serversPerProject = 2;
+  const endpointsPerServer = 6;
   const httpMethods = ['GET', 'POST', 'PUT', 'DELETE'];
   const apiPaths = [
     '/users/{id}', '/products/search', '/orders', '/auth/login', '/data/analytics',
@@ -279,39 +302,43 @@ const generateInitialEndpoints = (): Endpoint[] => {
     '/dashboard/details', '/config/set', '/status/ping'
   ];
 
-  const totalEndpointsToGenerate = 50; // Generate a fixed, larger number of endpoints
+  let endpointIdCounter = 1;
 
-  for (let i = 0; i < totalEndpointsToGenerate; i++) {
-    const baseline = Math.floor(Math.random() * (250 - 50 + 1)) + 50;
-    const randomMethod = httpMethods[Math.floor(Math.random() * httpMethods.length)];
-    const randomPath = apiPaths[Math.floor(Math.random() * apiPaths.length)];
-    const randomServerName = serverNames[Math.floor(Math.random() * serverNames.length)];
-    
-    const endpointName = `${randomMethod} ${randomPath}`;
+  for (const projectName of projectNames) {
+    for (let s = 1; s <= serversPerProject; s++) {
+      const serverName = `Server ${String.fromCharCode(64 + s)} for ${projectName}`; // A, B for each project
+      for (let e = 1; e <= endpointsPerServer; e++) {
+        const baseline = Math.floor(Math.random() * (250 - 50 + 1)) + 50;
+        const randomMethod = httpMethods[Math.floor(Math.random() * httpMethods.length)];
+        const randomPath = apiPaths[Math.floor(Math.random() * apiPaths.length)];
+        
+        const endpointName = `${randomMethod} ${randomPath} (Endpoint ${e})`;
 
-    // For lastChecked, pick a random date within the last 60 days (for table filtering)
-    const now = new Date();
-    const randomDaysAgo = Math.floor(Math.random() * 60); // 0 to 59 days ago
-    const initialLastChecked = new Date(now.getTime() - randomDaysAgo * 24 * 60 * 60 * 1000);
-    initialLastChecked.setHours(Math.floor(Math.random() * 24), Math.floor(Math.random() * 60), Math.floor(Math.random() * 60), 0);
+        const now = new Date();
+        const randomDaysAgo = Math.floor(Math.random() * 60);
+        const initialLastChecked = new Date(now.getTime() - randomDaysAgo * 24 * 60 * 60 * 1000);
+        initialLastChecked.setHours(Math.floor(Math.random() * 24), Math.floor(Math.random() * 60), Math.floor(Math.random() * 60), 0);
 
-    endpoints.push({
-      id: String(i + 1), // Use i+1 for unique IDs
-      name: endpointName,
-      url: `https://api.example.com/${randomServerName.toLowerCase().replace(' ', '-')}${randomPath}`,
-      baselineLatency: baseline,
-      internalLatency: null,
-      externalLatency: null,
-      internalHealth: 'Unknown',
-      externalHealth: 'Unknown',
-      lastChecked: initialLastChecked, // This will be the static last checked date for filtering the table rows
-      internalLatencyHistory: generateDummyHistory(MAX_HISTORY_POINTS, baseline, baseline * 0.2, 0.5, 10, initialLastChecked),
-      externalLatencyHistory: generateDummyHistory(MAX_HISTORY_POINTS, baseline * 1.2, baseline * 0.25, 0.5, 10, initialLastChecked),
-      errorRate: 0,
-      traffic: 0,
-      errorRateHistory: generateDummyHistory(MAX_HISTORY_POINTS, 1, 1, 0.3, 0.5, initialLastChecked),
-      serverName: randomServerName,
-    });
+        endpoints.push({
+          id: String(endpointIdCounter++),
+          name: endpointName,
+          url: `https://api.example.com/${projectName.toLowerCase().replace(' ', '-')}/${serverName.toLowerCase().replace(' ', '-')}${randomPath}`,
+          baselineLatency: baseline,
+          internalLatency: null,
+          externalLatency: null,
+          internalHealth: 'Unknown',
+          externalHealth: 'Unknown',
+          lastChecked: initialLastChecked,
+          internalLatencyHistory: generateDummyHistory(MAX_HISTORY_POINTS, baseline, baseline * 0.2, 0.5, 10, initialLastChecked),
+          externalLatencyHistory: generateDummyHistory(MAX_HISTORY_POINTS, baseline * 1.2, baseline * 0.25, 0.5, 10, initialLastChecked),
+          errorRate: 0,
+          traffic: 0,
+          errorRateHistory: generateDummyHistory(MAX_HISTORY_POINTS, 5, 3, 0.3, 1, initialLastChecked), // Base error count for history
+          serverName: serverName,
+          projectName: projectName,
+        });
+      }
+    }
   }
   return endpoints;
 };
@@ -324,23 +351,23 @@ const simulateApiCall = (baseline: number): { latency: number; health: 'Red' | '
   const randomFactor = Math.random();
   let latency: number;
   let health: 'Red' | 'Yellow' | 'Green';
-  let errorRate: number;
+  let errorRate: number; // This will now be a count
   let traffic: number;
 
   if (randomFactor < 0.7) {
     latency = baseline * (0.8 + Math.random() * 0.2);
     health = 'Green';
-    errorRate = Math.round(Math.random() * 2);
+    errorRate = Math.round(Math.random() * 2); // 0-2 errors
     traffic = Math.round(50 + Math.random() * 100);
   } else if (randomFactor < 0.9) {
     latency = baseline * (1.0 + Math.random() * 1.0);
     health = 'Yellow';
-    errorRate = Math.round(3 + Math.random() * 7);
+    errorRate = Math.round(3 + Math.random() * 7); // 3-10 errors
     traffic = Math.round(100 + Math.random() * 200);
   } else {
     latency = baseline * (2.0 + Math.random() * 2.0);
     health = 'Red';
-    errorRate = Math.round(10 + Math.random() * 20);
+    errorRate = Math.round(10 + Math.random() * 20); // 10-30 errors
     traffic = Math.round(20 + Math.random() * 50);
   }
 
@@ -378,129 +405,47 @@ interface LatencyBarProps {
 // LatencyBar component to visually represent latency against baseline
 const LatencyBar: React.FC<LatencyBarProps> = ({ currentLatency, baselineLatency, health, themeMode }) => {
   const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
-  const visualBaselineWidth = 60;
-  const ratio = currentLatency / baselineLatency;
-  let barWidth = visualBaselineWidth * ratio;
-  const maxVisualWidth = visualBaselineWidth * 2.0;
-  if (barWidth > maxVisualWidth) {
-    barWidth = maxVisualWidth;
-  }
 
-  let barColor: string;
+  let circleColor: string;
   switch (health) {
     case 'Green':
-      barColor = currentTheme.palette.success.main;
+      circleColor = currentTheme.palette.success.main;
       break;
     case 'Yellow':
-      barColor = currentTheme.palette.warning.main;
+      circleColor = currentTheme.palette.warning.main;
       break;
     case 'Red':
-      barColor = currentTheme.palette.error.main;
+      circleColor = currentTheme.palette.error.main;
       break;
     default:
-      barColor = currentTheme.palette.grey[500];
+      circleColor = currentTheme.palette.grey[500];
       break;
+  }
+
+  // Determine circle size based on latency relative to baseline
+  const ratio = currentLatency / baselineLatency;
+  let size = 12; // Base size
+  if (ratio > 1.5) {
+    size = 18; // Larger for degrading
+  } else if (ratio < 0.8) {
+    size = 10; // Smaller for improving
   }
 
   return (
     <Tooltip title={`Current: ${currentLatency}ms (Baseline: ${baselineLatency}ms)`}>
       <Box
         sx={{
-          width: visualBaselineWidth,
-          height: 8,
-          backgroundColor: currentTheme.palette.grey[300],
-          borderRadius: 4,
-          overflow: 'hidden',
-          position: 'relative',
-          mr: 1,
+          width: size,
+          height: size,
+          backgroundColor: circleColor,
+          borderRadius: '50%', // Make it a circle
+          display: 'inline-block', // To allow text next to it
+          verticalAlign: 'middle', // Align with text
+          ml: 1,
+          transition: 'all 0.3s ease-in-out', // Smooth transition for size and color
         }}
-      >
-        <Box
-          sx={{
-            width: `${barWidth}px`,
-            height: '100%',
-            backgroundColor: barColor,
-            borderRadius: 4,
-            transition: 'width 0.3s ease-in-out, background-color 0.3s ease-in-out',
-          }}
-        />
-      </Box>
+      />
     </Tooltip>
-  );
-};
-
-// Interface for the OverallApiStatusGrid component props
-interface OverallApiStatusGridProps {
-  endpoints: Endpoint[];
-  appliedStartDate: Date | null;
-  appliedEndDate: Date | null;
-  themeMode: 'light' | 'dark';
-}
-
-// OverallApiStatusGrid component to visualize overall API health, error rate, traffic
-const OverallApiStatusGrid: React.FC<OverallApiStatusGridProps> = ({ endpoints, appliedStartDate, appliedEndDate, themeMode }) => {
-  const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
-  // Helper to determine the single overall health for an endpoint
-  const getOverallHealth = (endpoint: Endpoint): 'Red' | 'Yellow' | 'Green' | 'Unknown' => {
-    if (endpoint.internalHealth === 'Red' || endpoint.externalHealth === 'Red') {
-      return 'Red';
-    } else if (endpoint.internalHealth === 'Yellow' || endpoint.externalHealth === 'Yellow') {
-      return 'Yellow';
-    } else if (endpoint.internalHealth === 'Green' && endpoint.externalHealth === 'Green') {
-      return 'Green';
-    }
-    return 'Unknown';
-  };
-
-  // Helper to get error rate color
-  const getErrorRateColor = (errorRate: number) => {
-    if (errorRate > 10) return currentTheme.palette.error.main;
-    if (errorRate > 3) return currentTheme.palette.warning.main;
-    return currentTheme.palette.success.main;
-  };
-
-  // Helper to get traffic indicator color (can be adapted for more complex logic)
-  const getTrafficColor = (traffic: number) => {
-    if (traffic > 200) return currentTheme.palette.primary.main;
-    if (traffic < 50) return currentTheme.palette.warning.main;
-    return currentTheme.palette.success.main;
-  };
-
-  // Helper to calculate average from history based on date range
-  const calculateAverage = (history: HistoryDataPoint[], startDate: Date | null, endDate: Date | null) => {
-    let filteredHistory = history;
-    if (startDate && endDate) {
-      filteredHistory = history.filter(point =>
-        point.timestamp.getTime() >= startDate.getTime() &&
-        point.timestamp.getTime() <= endDate.getTime()
-      );
-    }
-
-    if (filteredHistory.length === 0) return 'N/A';
-    const sum = filteredHistory.reduce((acc, val) => acc + val.value, 0);
-    return (sum / filteredHistory.length).toFixed(1);
-  };
-
-  return (
-    <Card>
-      <CardContent>
-        <Typography variant="h5" gutterBottom>
-          API Health Overview (Error Rate, Traffic)
-        </Typography>
-        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-          <Table aria-label="api status grid table">
-            <TableHead>
-              <TableRow><TableCell>No.</TableCell><TableCell>Server Name</TableCell><TableCell>Endpoint Name</TableCell><TableCell align="center">Overall Health</TableCell><TableCell align="right">Current Error Rate (%)</TableCell><TableCell align="right">Avg Error Rate (%)</TableCell><TableCell align="right">Traffic (RPS)</TableCell></TableRow>
-            </TableHead>
-            <TableBody>
-              {endpoints.map((endpoint, index) => ( // Added index here
-                <TableRow key={endpoint.id}><TableCell>{index + 1}</TableCell><TableCell>{endpoint.serverName}</TableCell><TableCell component="th" scope="row">{endpoint.name}</TableCell><TableCell align="center"><Chip label={getOverallHealth(endpoint)} color={getOverallHealth(endpoint) === 'Green' ? 'success' : getOverallHealth(endpoint) === 'Yellow' ? 'warning' : getOverallHealth(endpoint) === 'Red' ? 'error' : 'default'} sx={{ width: 100 }} /></TableCell><TableCell align="right" sx={{ color: getErrorRateColor(endpoint.errorRate), fontWeight: 500 }}>{endpoint.errorRate}%</TableCell><TableCell align="right">{calculateAverage(endpoint.errorRateHistory, appliedStartDate, appliedEndDate)}</TableCell><TableCell align="right" sx={{ color: getTrafficColor(endpoint.traffic), fontWeight: 500 }}>{endpoint.traffic}</TableCell></TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </CardContent>
-    </Card>
   );
 };
 
@@ -552,6 +497,37 @@ const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatus
     );
   }, [endpoints, appliedStartDate, appliedEndDate]);
 
+  // Helper to get error rate color (updated for counts)
+  const getErrorRateColor = (errorCount: number) => {
+    const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
+    if (errorCount > 10) return currentTheme.palette.error.main; // More than 10 errors is critical
+    if (errorCount > 3) return currentTheme.palette.warning.main; // More than 3 errors is warning
+    return currentTheme.palette.success.main; // 0-3 errors is healthy
+  };
+
+  // Helper to get traffic indicator color (duplicated from OverallApiStatusGrid for self-containment)
+  const getTrafficColor = (traffic: number) => {
+    const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
+    if (traffic > 200) return currentTheme.palette.primary.main;
+    if (traffic < 50) return currentTheme.palette.warning.main;
+    return currentTheme.palette.success.main;
+  };
+
+  // Helper to calculate average from history based on date range (duplicated from OverallApiStatusGrid for self-containment)
+  const calculateAverage = (history: HistoryDataPoint[], startDate: Date | null, endDate: Date | null) => {
+    let filteredHistory = history;
+    if (startDate && endDate) {
+      filteredHistory = history.filter(point =>
+        point.timestamp.getTime() >= startDate.getTime() &&
+        point.timestamp.getTime() <= endDate.getTime()
+      );
+    }
+
+    if (filteredHistory.length === 0) return 'N/A';
+    const sum = filteredHistory.reduce((acc, val) => acc + val.value, 0);
+    return (sum / filteredHistory.length).toFixed(1);
+  };
+
   return (
     <Card>
       <CardContent>
@@ -560,14 +536,46 @@ const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatus
         </Typography>
         <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
           <Table stickyHeader aria-label="endpoint health table">
-            <TableHead>
-              <TableRow><TableCell>No.</TableCell><TableCell sx={{ minWidth: '150px' }}>Endpoint Name</TableCell><TableCell sx={{ minWidth: '200px' }}>URL</TableCell><TableCell align="center">Internal Health</TableCell><TableCell align="center">External Health</TableCell><TableCell align="right" sx={{ minWidth: '60px' }}>Internal Latency (ms)</TableCell><TableCell align="right" sx={{ minWidth: '120px' }}>External Latency (ms)</TableCell><TableCell align="right" sx={{ minWidth: '80px' }}>Baseline (ms)</TableCell><TableCell align="center" sx={{ minWidth: '100px' }}>Last Checked</TableCell></TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredEndpoints.map((endpoint, index) => ( // Added index here
-                <TableRow key={endpoint.id}><TableCell>{index + 1}</TableCell><TableCell component="th" scope="row">{endpoint.name}</TableCell><TableCell>{endpoint.url}</TableCell><TableCell align="center"><Chip {...getStatusProps(endpoint.internalHealth)} size="small" sx={{ width: 100 }} /></TableCell><TableCell align="center"><Chip {...getStatusProps(endpoint.externalHealth)} size="small" sx={{ width: 100 }} /></TableCell><TableCell align="right"><Box display="flex" alignItems="center" justifyContent="flex-end"><Typography variant="body2" sx={{ mr: 1, minWidth: '40px', textAlign: 'right' }}>{endpoint.internalLatency !== null ? endpoint.internalLatency : 'N/A'}</Typography>{endpoint.internalLatency !== null && (<LatencyBar currentLatency={endpoint.internalLatency} baselineLatency={endpoint.baselineLatency} health={endpoint.internalHealth} themeMode={themeMode} />)}{getTrendIcon(getTrend(endpoint.internalLatencyHistory))}</Box></TableCell><TableCell align="right"><Box display="flex" alignItems="center" justifyContent="flex-end"><Typography variant="body2" sx={{ mr: 1, minWidth: '40px', textAlign: 'right' }}>{endpoint.externalLatency !== null ? endpoint.externalLatency : 'N/A'}</Typography>{endpoint.externalLatency !== null && (<LatencyBar currentLatency={endpoint.externalLatency} baselineLatency={endpoint.baselineLatency} health={endpoint.externalHealth} themeMode={themeMode} />)}{getTrendIcon(getTrend(endpoint.externalLatencyHistory))}</Box></TableCell><TableCell align="right">{endpoint.baselineLatency}</TableCell><TableCell align="center">{endpoint.lastChecked ? endpoint.lastChecked.toLocaleString() : 'N/A'}</TableCell></TableRow>
-              ))}
-            </TableBody>
+            <TableHead><TableRow>
+                <TableCell sx={{ minWidth: '25px' }}>No.</TableCell>
+                <TableCell sx={{ minWidth: '150px' }}>Endpoint Name</TableCell>
+                <TableCell align="center" sx={{ minWidth: '50px' }}>Internal Health</TableCell>
+                <TableCell align="center" sx={{ minWidth: '50px' }}>External Health</TableCell>
+                <TableCell align="right" sx={{ minWidth: '30px' }}>Internal Latency (ms)</TableCell>
+                <TableCell align="right" sx={{ minWidth: '60px' }}>External Latency (ms)</TableCell>
+                <TableCell align="right" sx={{ minWidth: '80px' }}>Baseline (ms)</TableCell>
+                <TableCell align="right" sx={{ minWidth: '100px' }}>Current Errors</TableCell> {/* Changed header */}
+                <TableCell align="right" sx={{ minWidth: '100px' }}>Avg Errors</TableCell> {/* Changed header */}
+                <TableCell align="right" sx={{ minWidth: '80px' }}>Traffic (RPS)</TableCell>
+                <TableCell align="center" sx={{ minWidth: '100px' }}>Last Checked</TableCell>
+              </TableRow></TableHead>
+            <TableBody>{filteredEndpoints.map((endpoint, index) => (
+                <TableRow key={endpoint.id}>
+                  <TableCell>{index + 1}</TableCell>
+                  <TableCell component="th" scope="row">{endpoint.name}</TableCell>
+                  <TableCell align="center"><Chip {...getStatusProps(endpoint.internalHealth)} size="small" sx={{ width: 50, fontSize: '0.65rem' }} /></TableCell>
+                  <TableCell align="center"><Chip {...getStatusProps(endpoint.externalHealth)} size="small" sx={{ width: 50, fontSize: '0.65rem' }} /></TableCell>
+                  <TableCell align="right">
+                    <Box display="flex" alignItems="center" justifyContent="flex-end">
+                      <Typography variant="body2" sx={{ mr: 1, minWidth: '20px', textAlign: 'right', fontSize: '0.75rem' }}>{endpoint.internalLatency !== null ? endpoint.internalLatency : 'N/A'}</Typography>
+                      {endpoint.internalLatency !== null && (<LatencyBar currentLatency={endpoint.internalLatency} baselineLatency={endpoint.baselineLatency} health={endpoint.internalHealth} themeMode={themeMode} />)}
+                      {getTrendIcon(getTrend(endpoint.internalLatencyHistory))}
+                    </Box>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Box display="flex" alignItems="center" justifyContent="flex-end">
+                      <Typography variant="body2" sx={{ mr: 1, minWidth: '20px', textAlign: 'right', fontSize: '0.75rem' }}>{endpoint.externalLatency !== null ? endpoint.externalLatency : 'N/A'}</Typography>
+                      {endpoint.externalLatency !== null && (<LatencyBar currentLatency={endpoint.externalLatency} baselineLatency={endpoint.baselineLatency} health={endpoint.externalHealth} themeMode={themeMode} />)}
+                      {getTrendIcon(getTrend(endpoint.externalLatencyHistory))}
+                    </Box>
+                  </TableCell>
+                  <TableCell align="right">{endpoint.baselineLatency}</TableCell>
+                  <TableCell align="right" sx={{ color: getErrorRateColor(endpoint.errorRate), fontWeight: 500 }}>{endpoint.errorRate}</TableCell>
+                  <TableCell align="right">{calculateAverage(endpoint.errorRateHistory, appliedStartDate, appliedEndDate)}</TableCell>
+                  <TableCell align="right" sx={{ color: getTrafficColor(endpoint.traffic), fontWeight: 500 }}>{endpoint.traffic}</TableCell>
+                  <TableCell align="center">{endpoint.lastChecked ? endpoint.lastChecked.toLocaleString() : 'N/A'}</TableCell>
+                </TableRow>
+              ))}</TableBody>
           </Table>
         </TableContainer>
       </CardContent>
@@ -628,6 +636,55 @@ const AutomatedSelfHealingActions: React.FC = () => (
   </Card>
 );
 
+// Interface for User data
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  lastLogin: Date;
+  department: string;
+  contact: string;
+}
+
+// Dummy User data for a single logged-in user
+const loggedInUser: User = {
+  id: 'user-123',
+  name: 'John Doe',
+  email: 'john.doe@example.com',
+  role: 'Administrator',
+  lastLogin: new Date('2025-07-10T12:00:00Z'),
+  department: 'IT Operations',
+  contact: '+1-555-123-4567',
+};
+
+// UserProfileTable Component
+const UserProfileTable: React.FC = () => {
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h5" gutterBottom>
+          My Profile
+        </Typography>
+        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+          <Table aria-label="user profile table">
+            {/* Ensure no whitespace/newlines between TableBody and the mapped TableRow */}
+            <TableBody><TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold', width: '30%' }}>User ID</TableCell><TableCell>{loggedInUser.id}</TableCell></TableRow>
+              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Name</TableCell><TableCell>{loggedInUser.name}</TableCell></TableRow>
+              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Email</TableCell><TableCell>{loggedInUser.email}</TableCell></TableRow>
+              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Role</TableCell><TableCell>{loggedInUser.role}</TableCell></TableRow>
+              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Department</TableCell><TableCell>{loggedInUser.department}</TableCell></TableRow>
+              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Contact</TableCell><TableCell>{loggedInUser.contact}</TableCell></TableRow>
+              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Last Login</TableCell><TableCell>{loggedInUser.lastLogin.toLocaleString()}</TableCell></TableRow>
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </Card>
+  );
+};
+
+
 // Navigation component
 interface SidebarNavProps {
   onSelectView: (view: string) => void;
@@ -639,11 +696,11 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, theme
   const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
   const navItems = [
     { id: 'table', text: 'Endpoint Table', icon: <TableChartIcon /> },
-    { id: 'grid', text: 'API Status Grid', icon: <GridOnIcon /> },
     { id: 'error_trends', text: 'Error Trends', icon: <DeveloperBoardIcon /> },
     { id: 'summary', text: 'Overall Summary', icon: <DashboardIcon /> },
     { id: 'notifications', text: 'Notifications', icon: <NotificationsIcon /> },
     { id: 'selfHealing', text: 'Self-Healing', icon: <AutoFixHighIcon /> },
+    { id: 'user_profile', text: 'User Profile', icon: <PersonIcon /> }, // New User Profile tab
   ];
 
   return (
@@ -732,7 +789,7 @@ const MiniTrendGraph: React.FC<MiniTrendGraphProps> = ({ history, label, unit, c
   if (filteredHistory.length === 0) {
     return (
       <Box sx={{ width: '100%', height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', border: '1px dashed', borderColor: currentTheme.palette.grey[400], borderRadius: 2, p: 2 }}>
-        <Typography variant="body2">No data available for selected date range.</Typography>
+        <Typography variant="body2">No data available for selected date.</Typography>
       </Box>
     );
   }
@@ -786,7 +843,7 @@ const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ endpoints, appliedSta
     <Card>
       <CardContent>
         <Typography variant="h5" gutterBottom>
-          Error Rate Trends Over Time
+          Error Count Trends Over Time
         </Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 3 }}>
           {endpoints.map(endpoint => (
@@ -800,15 +857,15 @@ const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ endpoints, appliedSta
                 </Typography>
                 <MiniTrendGraph
                   history={endpoint.errorRateHistory}
-                  label="Error Rate"
-                  unit="%"
+                  label="Errors" // Changed label
+                  unit="errors" // Changed unit
                   color={currentTheme.palette.error.main}
                   appliedStartDate={appliedStartDate}
                   appliedEndDate={appliedEndDate}
                   themeMode={themeMode}
                 />
                 <Typography variant="body2" component="span" sx={{ mt: 1 }}>
-                  Current Error Rate: <Chip label={`${endpoint.errorRate}%`} size="small" color={endpoint.errorRate > 10 ? 'error' : endpoint.errorRate > 3 ? 'warning' : 'success'} />
+                  Current Errors: <Chip label={`${endpoint.errorRate} errors`} size="small" color={endpoint.errorRate > 10 ? 'error' : endpoint.errorRate > 3 ? 'warning' : 'success'} /> {/* Updated label */}
                 </Typography>
               </CardContent>
             </Card>
@@ -828,13 +885,24 @@ const App: React.FC = () => {
   const [appliedStartDate, setAppliedStartDate] = useState<Date | null>(null);
   const [appliedEndDate, setAppliedEndDate] = useState<Date | null>(null);
   const [serverNameFilter, setServerNameFilter] = useState<string>('');
+  const [projectFilter, setProjectFilter] = useState<string>(''); // New state for project filter
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
   const [selectedTimeRange, setSelectedTimeRange] = useState<string>(''); // Reintroduced state
 
   const currentTheme = useMemo(() => themeMode === 'light' ? lightTheme : darkTheme, [themeMode]);
 
   const uniqueServerNames = useMemo(() => {
+    // Filter server names based on the selected project
+    if (projectFilter) {
+      const names = new Set(initialEndpoints.filter(e => e.projectName === projectFilter).map(e => e.serverName));
+      return Array.from(names).sort();
+    }
     const names = new Set(initialEndpoints.map(e => e.serverName));
+    return Array.from(names).sort();
+  }, [initialEndpoints, projectFilter]); // Added projectFilter to dependencies
+
+  const uniqueProjectNames = useMemo(() => { // New memoized list for project names
+    const names = new Set(initialEndpoints.map(e => e.projectName));
     return Array.from(names).sort();
   }, []);
 
@@ -933,7 +1001,7 @@ const App: React.FC = () => {
           newAppliedStartDate = new Date(now.getTime() - 1 * 60 * 1000);
           break;
         case '3min':
-          newAppliedStartDate = new Date(now.getTime() - 3 * 60 * 1000);
+          newAppliedStartDate = new Date(now.getTime() - 3 * 60 * 60 * 1000);
           break;
         case '5min':
           newAppliedStartDate = new Date(now.getTime() - 5 * 60 * 1000);
@@ -981,16 +1049,25 @@ const App: React.FC = () => {
     setAppliedStartDate(null);
     setAppliedEndDate(null);
     setServerNameFilter('');
+    setProjectFilter(''); // Clear project filter
     setSelectedTimeRange(''); // Clear time range as well
   };
 
-  // Filter endpoints by server name first
-  const filteredEndpointsByServer = useMemo(() => {
-    if (!serverNameFilter) {
+  // Filter endpoints by project name first
+  const filteredEndpointsByProject = useMemo(() => {
+    if (!projectFilter) {
       return endpoints;
     }
-    return endpoints.filter(endpoint => endpoint.serverName === serverNameFilter);
-  }, [endpoints, serverNameFilter]);
+    return endpoints.filter(endpoint => endpoint.projectName === projectFilter);
+  }, [endpoints, projectFilter]);
+
+  // Then filter by server name
+  const filteredEndpointsByServer = useMemo(() => {
+    if (!serverNameFilter) {
+      return filteredEndpointsByProject;
+    }
+    return filteredEndpointsByProject.filter(endpoint => endpoint.serverName === serverNameFilter);
+  }, [filteredEndpointsByProject, serverNameFilter]);
 
   // Then apply the date range filter based on endpoint.lastChecked
   const displayEndpoints = useMemo(() => {
@@ -1038,24 +1115,52 @@ const App: React.FC = () => {
             </IconButton>
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 2, mb: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-            <TextField
-              label="Start Date"
-              type="date"
-              value={startDateString}
-              onChange={(e) => { setStartDateString(e.target.value); setSelectedTimeRange(''); }}
-              InputLabelProps={{ shrink: true }}
-              sx={{ minWidth: 180 }}
-            />
-            <TextField
-              label="End Date"
-              type="date"
-              value={endDateString}
-              onChange={(e) => { setEndDateString(e.target.value); setSelectedTimeRange(''); }}
-              InputLabelProps={{ shrink: true }}
-              sx={{ minWidth: 180 }}
-            />
-            <FormControl sx={{ minWidth: 180 }}>
+          <Box sx={{ display: 'flex', gap: 1, mb: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Project Dropdown */}
+            <FormControl sx={{ minWidth: 120 }}>
+              <InputLabel id="project-select-label">Project</InputLabel>
+              <Select
+                labelId="project-select-label"
+                id="project-select"
+                value={projectFilter}
+                label="Project"
+                onChange={(e) => {
+                  setProjectFilter(e.target.value as string);
+                  setServerNameFilter(''); // Clear server filter when project changes
+                }}
+                sx={{ borderRadius: 2 }}
+              >
+                <MenuItem value="">
+                  <em>All Projects</em>
+                </MenuItem>
+                {uniqueProjectNames.map(name => (
+                  <MenuItem key={name} value={name}>{name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            {/* Server Dropdown */}
+            <FormControl sx={{ minWidth: 120 }}>
+              <InputLabel id="server-name-select-label">Server</InputLabel>
+              <Select
+                labelId="server-name-select-label"
+                id="server-name-select"
+                value={serverNameFilter}
+                label="Server"
+                onChange={(e) => setServerNameFilter(e.target.value as string)}
+                sx={{ borderRadius: 2 }}
+              >
+                <MenuItem value="">
+                  <em>All Servers</em>
+                </MenuItem>
+                {uniqueServerNames.map(name => (
+                  <MenuItem key={name} value={name}>{name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            {/* Time Range Dropdown */}
+            <FormControl sx={{ minWidth: 120 }}>
               <InputLabel id="time-range-select-label">Time Range</InputLabel>
               <Select
                 labelId="time-range-select-label"
@@ -1078,38 +1183,37 @@ const App: React.FC = () => {
                 <MenuItem value="1month">Last 1 Month</MenuItem>
               </Select>
             </FormControl>
+
+            {/* Start Date */}
+            <TextField
+              label="From Date"
+              type="date"
+              value={startDateString}
+              onChange={(e) => { setStartDateString(e.target.value); setSelectedTimeRange(''); }}
+              InputLabelProps={{ shrink: true }}
+            />
+            {/* End Date */}
+            <TextField
+              label="To Date"
+              type="date"
+              value={endDateString}
+              onChange={(e) => { setEndDateString(e.target.value); setSelectedTimeRange(''); }}
+              InputLabelProps={{ shrink: true }}
+            />
             <Button
               variant="contained"
               onClick={handleApplyFilter}
-              sx={{ height: '56px', px: 3, borderRadius: 2 }}
+              sx={{ height: '40px', px: 2, borderRadius: 2 }} /* Reduced height to 40px */
             >
-              Apply Filter
+              Apply
             </Button>
             <Button
               variant="outlined"
               onClick={handleClearFilters}
-              sx={{ height: '56px', px: 3, borderRadius: 2 }}
+              sx={{ height: '40px', px: 2, borderRadius: 2 }} /* Reduced height to 40px */
             >
-              Clear Filters
+              Clear
             </Button>
-            <FormControl sx={{ minWidth: 200 }}>
-              <InputLabel id="server-name-select-label">Filter by Server</InputLabel>
-              <Select
-                labelId="server-name-select-label"
-                id="server-name-select"
-                value={serverNameFilter}
-                label="Filter by Server"
-                onChange={(e) => setServerNameFilter(e.target.value as string)}
-                sx={{ borderRadius: 2 }}
-              >
-                <MenuItem value="">
-                  <em>All Servers</em>
-                </MenuItem>
-                {uniqueServerNames.map(name => (
-                  <MenuItem key={name} value={name}>{name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
           </Box>
 
           {activeView === 'summary' && (
@@ -1139,15 +1243,6 @@ const App: React.FC = () => {
             />
           )}
 
-          {activeView === 'grid' && (
-            <OverallApiStatusGrid
-              endpoints={displayEndpoints}
-              appliedStartDate={appliedStartDate}
-              appliedEndDate={appliedEndDate}
-              themeMode={themeMode}
-            />
-          )}
-
           {activeView === 'error_trends' && (
             <ErrorRateTrends
               endpoints={displayEndpoints}
@@ -1159,6 +1254,7 @@ const App: React.FC = () => {
 
           {activeView === 'notifications' && <NotificationAlerting />}
           {activeView === 'selfHealing' && <AutomatedSelfHealingActions />}
+          {activeView === 'user_profile' && <UserProfileTable />} {/* Render UserProfileTable */}
         </Container>
       </Box>
     </ThemeProvider>
