@@ -704,7 +704,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, theme
   ];
 
   return (
-    <Box sx={{ width: 168, flexShrink: 0, bgcolor: 'background.paper', borderRight: 1, borderColor: 'divider', height: '100vh', position: 'sticky', top: 0, p: 1 }}>
+    <Box sx={{ width: '150px', flexShrink: 0, bgcolor: 'background.paper', borderRight: 1, borderColor: 'divider', height: '100vh', position: 'sticky', top: 0, p: 0.5 }}>
       <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold', color: currentTheme.palette.primary.main, fontSize: '1rem', justifyContent: 'center', textAlign: 'center' }}>
         Views
       </Typography>
