@@ -1,3 +1,13 @@
+Here are the commands to set up this project:
+
+* `npx create-react-app my-api-dashboard`
+* `cd my-api-dashboard`
+* `npm install @mui/material @emotion/react @emotion/styled @mui/icons-material recharts`
+* `npm install @mui/x-date-pickers dayjs`
+* `npm start`
+
+
+
 
 ### **Presentation Title Suggestion:**
 "Proactive API Health: A Dashboard for Performance Monitoring & Self-Healing"
