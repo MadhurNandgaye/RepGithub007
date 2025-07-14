@@ -704,7 +704,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, theme
   ];
 
   return (
-    <Box sx={{ width: '150px', flexShrink: 0, bgcolor: 'background.paper', borderRight: 1, borderColor: 'divider', height: '100vh', position: 'sticky', top: 0, p: 0.5 }}>
+    <Box sx={{ width: '154px', flexShrink: 0, bgcolor: 'background.paper', borderRight: 1, borderColor: 'divider', height: '100vh', position: 'sticky', top: 0, p: 1 }}>
       <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold', color: currentTheme.palette.primary.main, fontSize: '1rem', justifyContent: 'center', textAlign: 'center' }}>
         Views
       </Typography>
@@ -1115,106 +1115,109 @@ const App: React.FC = () => {
             </IconButton>
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 1, mb: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-            {/* Project Dropdown */}
-            <FormControl sx={{ minWidth: 120 }}>
-              <InputLabel id="project-select-label">Project</InputLabel>
-              <Select
-                labelId="project-select-label"
-                id="project-select"
-                value={projectFilter}
-                label="Project"
-                onChange={(e) => {
-                  setProjectFilter(e.target.value as string);
-                  setServerNameFilter(''); // Clear server filter when project changes
-                }}
-                sx={{ borderRadius: 2 }}
-              >
-                <MenuItem value="">
-                  <em>All Projects</em>
-                </MenuItem>
-                {uniqueProjectNames.map(name => (
-                  <MenuItem key={name} value={name}>{name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+          {/* Conditional rendering of filter options */}
+          {(activeView === 'table' || activeView === 'summary' || activeView === 'error_trends') && (
+            <Box sx={{ display: 'flex', gap: 1, mb: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Project Dropdown */}
+              <FormControl sx={{ minWidth: 120 }}>
+                <InputLabel id="project-select-label">Project</InputLabel>
+                <Select
+                  labelId="project-select-label"
+                  id="project-select"
+                  value={projectFilter}
+                  label="Project"
+                  onChange={(e) => {
+                    setProjectFilter(e.target.value as string);
+                    setServerNameFilter(''); // Clear server filter when project changes
+                  }}
+                  sx={{ borderRadius: 2 }}
+                >
+                  <MenuItem value="">
+                    <em>All Projects</em>
+                  </MenuItem>
+                  {uniqueProjectNames.map(name => (
+                    <MenuItem key={name} value={name}>{name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-            {/* Server Dropdown */}
-            <FormControl sx={{ minWidth: 120 }}>
-              <InputLabel id="server-name-select-label">Server</InputLabel>
-              <Select
-                labelId="server-name-select-label"
-                id="server-name-select"
-                value={serverNameFilter}
-                label="Server"
-                onChange={(e) => setServerNameFilter(e.target.value as string)}
-                sx={{ borderRadius: 2 }}
-              >
-                <MenuItem value="">
-                  <em>All Servers</em>
-                </MenuItem>
-                {uniqueServerNames.map(name => (
-                  <MenuItem key={name} value={name}>{name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+              {/* Server Dropdown */}
+              <FormControl sx={{ minWidth: 120 }}>
+                <InputLabel id="server-name-select-label">Server</InputLabel>
+                <Select
+                  labelId="server-name-select-label"
+                  id="server-name-select"
+                  value={serverNameFilter}
+                  label="Server"
+                  onChange={(e) => setServerNameFilter(e.target.value as string)}
+                  sx={{ borderRadius: 2 }}
+                >
+                  <MenuItem value="">
+                    <em>All Servers</em>
+                  </MenuItem>
+                  {uniqueServerNames.map(name => (
+                    <MenuItem key={name} value={name}>{name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-            {/* Time Range Dropdown */}
-            <FormControl sx={{ minWidth: 120 }}>
-              <InputLabel id="time-range-select-label">Time Range</InputLabel>
-              <Select
-                labelId="time-range-select-label"
-                id="time-range-select"
-                value={selectedTimeRange}
-                label="Time Range"
-                onChange={(e) => { setSelectedTimeRange(e.target.value as string); setStartDateString(''); setEndDateString(''); }}
-                sx={{ borderRadius: 2 }}
-              >
-                <MenuItem value="">
-                  <em>None</em>
-                </MenuItem>
-                <MenuItem value="1min">Last 1 min</MenuItem>
-                <MenuItem value="3min">Last 3 min</MenuItem>
-                <MenuItem value="5min">Last 5 min</MenuItem>
-                <MenuItem value="1hour">Last 1 hour</MenuItem>
-                <MenuItem value="3hours">Last 3 hours</MenuItem>
-                <MenuItem value="1day">Last 1 Day</MenuItem>
-                <MenuItem value="1week">Last 1 Week</MenuItem>
-                <MenuItem value="1month">Last 1 Month</MenuItem>
-              </Select>
-            </FormControl>
+              {/* Time Range Dropdown */}
+              <FormControl sx={{ minWidth: 120 }}>
+                <InputLabel id="time-range-select-label">Time Range</InputLabel>
+                <Select
+                  labelId="time-range-select-label"
+                  id="time-range-select"
+                  value={selectedTimeRange}
+                  label="Time Range"
+                  onChange={(e) => { setSelectedTimeRange(e.target.value as string); setStartDateString(''); setEndDateString(''); }}
+                  sx={{ borderRadius: 2 }}
+                >
+                  <MenuItem value="">
+                    <em>None</em>
+                  </MenuItem>
+                  <MenuItem value="1min">Last 1 min</MenuItem>
+                  <MenuItem value="3min">Last 3 min</MenuItem>
+                  <MenuItem value="5min">Last 5 min</MenuItem>
+                  <MenuItem value="1hour">Last 1 hour</MenuItem>
+                  <MenuItem value="3hours">Last 3 hours</MenuItem>
+                  <MenuItem value="1day">Last 1 Day</MenuItem>
+                  <MenuItem value="1week">Last 1 Week</MenuItem>
+                  <MenuItem value="1month">Last 1 Month</MenuItem>
+                </Select>
+              </FormControl>
 
-            {/* Start Date */}
-            <TextField
-              label="From Date"
-              type="date"
-              value={startDateString}
-              onChange={(e) => { setStartDateString(e.target.value); setSelectedTimeRange(''); }}
-              InputLabelProps={{ shrink: true }}
-            />
-            {/* End Date */}
-            <TextField
-              label="To Date"
-              type="date"
-              value={endDateString}
-              onChange={(e) => { setEndDateString(e.target.value); setSelectedTimeRange(''); }}
-              InputLabelProps={{ shrink: true }}
-            />
-            <Button
-              variant="contained"
-              onClick={handleApplyFilter}
-              sx={{ height: '40px', px: 2, borderRadius: 2 }} /* Reduced height to 40px */
-            >
-              Apply
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={handleClearFilters}
-              sx={{ height: '40px', px: 2, borderRadius: 2 }} /* Reduced height to 40px */
-            >
-              Clear
-            </Button>
-          </Box>
+              {/* Start Date */}
+              <TextField
+                label="From Date"
+                type="date"
+                value={startDateString}
+                onChange={(e) => { setStartDateString(e.target.value); setSelectedTimeRange(''); }}
+                InputLabelProps={{ shrink: true }}
+              />
+              {/* End Date */}
+              <TextField
+                label="To Date"
+                type="date"
+                value={endDateString}
+                onChange={(e) => { setEndDateString(e.target.value); setSelectedTimeRange(''); }}
+                InputLabelProps={{ shrink: true }}
+              />
+              <Button
+                variant="contained"
+                onClick={handleApplyFilter}
+                sx={{ height: '40px', px: 2, borderRadius: 2 }} /* Reduced height to 40px */
+              >
+                Apply
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={handleClearFilters}
+                sx={{ height: '40px', px: 2, borderRadius: 2 }} /* Reduced height to 40px */
+              >
+                Clear
+              </Button>
+            </Box>
+          )}
 
           {activeView === 'summary' && (
             <OverallSummaryStatus
