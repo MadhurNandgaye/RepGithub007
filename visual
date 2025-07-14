@@ -32,7 +32,7 @@ import {
   FormControl,
   InputLabel,
   IconButton,
-  Grid, // Added for grid layout
+  Grid,
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -48,23 +48,20 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
-import PersonIcon from '@mui/icons-material/Person'; // Import User Profile Icon
+import PersonIcon from '@mui/icons-material/Person';
 import { Brightness4 as Brightness4Icon, Brightness7 as Brightness7Icon } from '@mui/icons-material';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday'; // For date picker icon
-
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 
 import {
   AreaChart,
   Area,
   ResponsiveContainer,
   Tooltip as RechartsTooltip,
-  XAxis, // Added for Recharts
-  YAxis, // Added for Recharts
+  XAxis,
+  YAxis,
 } from 'recharts';
 import { blueGrey } from '@mui/material/colors';
 
-
-// Define the light theme
 const lightTheme = createTheme({
   typography: {
     fontFamily: 'Inter, sans-serif',
@@ -136,7 +133,6 @@ const lightTheme = createTheme({
   },
 });
 
-// Define the dark theme
 const darkTheme = createTheme({
   typography: {
     fontFamily: 'Inter, sans-serif',
@@ -205,32 +201,28 @@ const darkTheme = createTheme({
         },
       },
     },
-    // START: Added for date picker icon color in dark theme
     MuiIconButton: {
       styleOverrides: {
         root: {
-          color: '#ffffff', // Set icon color to white
+          color: '#ffffff',
         },
       },
     },
     MuiInputAdornment: {
       styleOverrides: {
         root: {
-          color: '#ffffff', // Ensure adornment content is white
+          color: '#ffffff',
         },
       },
     },
-    // END: Added for date picker icon color in dark theme
   },
 });
 
-// Interface for a single history data point with timestamp
 interface HistoryDataPoint {
   value: number;
   timestamp: Date;
 }
 
-// Interface for a single API endpoint
 interface Endpoint {
   id: string;
   name: string;
@@ -240,30 +232,28 @@ interface Endpoint {
   externalLatency: number | null;
   internalHealth: 'Red' | 'Yellow' | 'Green' | 'Unknown';
   externalHealth: 'Red' | 'Yellow' | 'Green' | 'Unknown';
-  lastChecked: Date | null; // This will be a fixed historical date for filtering the table rows
+  lastChecked: Date | null;
   internalLatencyHistory: HistoryDataPoint[];
   externalLatencyHistory: HistoryDataPoint[];
-  errorRate: number; // Changed from percentage to count
+  errorRate: number;
   traffic: number;
   errorRateHistory: HistoryDataPoint[];
   serverName: string;
-  projectName: string; // Added projectName to Endpoint interface
+  projectName: string;
 }
 
-const MAX_HISTORY_POINTS = 60; // Number of data points to keep in history for trends
-const HISTORY_SPAN_DAYS = 7; // Number of days the generated history should span for initial data
+const MAX_HISTORY_POINTS = 60;
+const HISTORY_SPAN_DAYS = 7;
 
-// Helper function to generate initial dummy history data with timestamps
 const generateDummyHistory = (
-  length: number, // Number of data points
+  length: number,
   baseValue: number,
   amplitude: number,
   frequency: number,
   randomness: number,
-  referenceDate: Date // The date around which history should be generated
+  referenceDate: Date
 ): HistoryDataPoint[] => {
   const history: HistoryDataPoint[] = [];
-  // Distribute 'length' history points backwards from the 'referenceDate' over the last HISTORY_SPAN_DAYS
   const historySpanMs = HISTORY_SPAN_DAYS * 24 * 60 * 60 * 1000;
   const startTime = referenceDate.getTime() - historySpanMs;
 
@@ -275,10 +265,9 @@ const generateDummyHistory = (
   return history;
 };
 
-// Generate initial endpoints across multiple servers
 const generateInitialEndpoints = (): Endpoint[] => {
   const endpoints: Endpoint[] = [];
-  const projectNames = ['Project Alpha', 'Project Beta', 'Project Gamma', 'Project Delta']; // 4 Projects
+  const projectNames = ['Project Alpha', 'Project Beta', 'Project Gamma', 'Project Delta'];
   const serversPerProject = 2;
   const endpointsPerServer = 6;
   const httpMethods = ['GET', 'POST', 'PUT', 'DELETE'];
@@ -306,12 +295,11 @@ const generateInitialEndpoints = (): Endpoint[] => {
 
   for (const projectName of projectNames) {
     for (let s = 1; s <= serversPerProject; s++) {
-      const serverName = `Server ${String.fromCharCode(64 + s)} for ${projectName}`; // A, B for each project
+      const serverName = `Server ${String.fromCharCode(64 + s)} for ${projectName}`;
       for (let e = 1; e <= endpointsPerServer; e++) {
         const baseline = Math.floor(Math.random() * (250 - 50 + 1)) + 50;
         const randomMethod = httpMethods[Math.floor(Math.random() * httpMethods.length)];
         const randomPath = apiPaths[Math.floor(Math.random() * apiPaths.length)];
-        
         const endpointName = `${randomMethod} ${randomPath} (Endpoint ${e})`;
 
         const now = new Date();
@@ -333,7 +321,7 @@ const generateInitialEndpoints = (): Endpoint[] => {
           externalLatencyHistory: generateDummyHistory(MAX_HISTORY_POINTS, baseline * 1.2, baseline * 0.25, 0.5, 10, initialLastChecked),
           errorRate: 0,
           traffic: 0,
-          errorRateHistory: generateDummyHistory(MAX_HISTORY_POINTS, 5, 3, 0.3, 1, initialLastChecked), // Base error count for history
+          errorRateHistory: generateDummyHistory(MAX_HISTORY_POINTS, 5, 3, 0.3, 1, initialLastChecked),
           serverName: serverName,
           projectName: projectName,
         });
@@ -345,29 +333,27 @@ const generateInitialEndpoints = (): Endpoint[] => {
 
 const initialEndpoints: Endpoint[] = generateInitialEndpoints();
 
-
-// Helper function to simulate API call and determine health status based on latency
 const simulateApiCall = (baseline: number): { latency: number; health: 'Red' | 'Yellow' | 'Green'; errorRate: number; traffic: number } => {
   const randomFactor = Math.random();
   let latency: number;
   let health: 'Red' | 'Yellow' | 'Green';
-  let errorRate: number; // This will now be a count
+  let errorRate: number;
   let traffic: number;
 
   if (randomFactor < 0.7) {
     latency = baseline * (0.8 + Math.random() * 0.2);
     health = 'Green';
-    errorRate = Math.round(Math.random() * 2); // 0-2 errors
+    errorRate = Math.round(Math.random() * 2);
     traffic = Math.round(50 + Math.random() * 100);
   } else if (randomFactor < 0.9) {
     latency = baseline * (1.0 + Math.random() * 1.0);
     health = 'Yellow';
-    errorRate = Math.round(3 + Math.random() * 7); // 3-10 errors
+    errorRate = Math.round(3 + Math.random() * 7);
     traffic = Math.round(100 + Math.random() * 200);
   } else {
     latency = baseline * (2.0 + Math.random() * 2.0);
     health = 'Red';
-    errorRate = Math.round(10 + Math.random() * 20); // 10-30 errors
+    errorRate = Math.round(10 + Math.random() * 20);
     traffic = Math.round(20 + Math.random() * 50);
   }
 
@@ -376,7 +362,6 @@ const simulateApiCall = (baseline: number): { latency: number; health: 'Red' | '
   return { latency: Math.round(latency), health, errorRate, traffic };
 };
 
-// Helper function to determine trend based on recent history
 const getTrend = (history: HistoryDataPoint[]): 'improving' | 'degrading' | 'stable' | 'unknown' => {
   if (history.length < 2) {
     return 'unknown';
@@ -394,7 +379,6 @@ const getTrend = (history: HistoryDataPoint[]): 'improving' | 'degrading' | 'sta
   }
 };
 
-// Interface for the LatencyBar component props
 interface LatencyBarProps {
   currentLatency: number;
   baselineLatency: number;
@@ -402,7 +386,6 @@ interface LatencyBarProps {
   themeMode: 'light' | 'dark';
 }
 
-// LatencyBar component to visually represent latency against baseline
 const LatencyBar: React.FC<LatencyBarProps> = ({ currentLatency, baselineLatency, health, themeMode }) => {
   const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
 
@@ -422,13 +405,12 @@ const LatencyBar: React.FC<LatencyBarProps> = ({ currentLatency, baselineLatency
       break;
   }
 
-  // Determine circle size based on latency relative to baseline
   const ratio = currentLatency / baselineLatency;
-  let size = 12; // Base size
+  let size = 12;
   if (ratio > 1.5) {
-    size = 18; // Larger for degrading
+    size = 18;
   } else if (ratio < 0.8) {
-    size = 10; // Smaller for improving
+    size = 10;
   }
 
   return (
@@ -438,18 +420,17 @@ const LatencyBar: React.FC<LatencyBarProps> = ({ currentLatency, baselineLatency
           width: size,
           height: size,
           backgroundColor: circleColor,
-          borderRadius: '50%', // Make it a circle
-          display: 'inline-block', // To allow text next to it
-          verticalAlign: 'middle', // Align with text
+          borderRadius: '50%',
+          display: 'inline-block',
+          verticalAlign: 'middle',
           ml: 1,
-          transition: 'all 0.3s ease-in-out', // Smooth transition for size and color
+          transition: 'all 0.3s ease-in-out',
         }}
       />
     </Tooltip>
   );
 };
 
-// New components for each section
 const OverallSummaryStatus: React.FC<{ totalEndpoints: number; healthyEndpoints: number; yellowEndpoints: number; redEndpoints: number; overallStatus: string }> = ({ totalEndpoints, healthyEndpoints, yellowEndpoints, redEndpoints, overallStatus }) => (
   <Card>
     <CardContent>
@@ -482,7 +463,6 @@ const OverallSummaryStatus: React.FC<{ totalEndpoints: number; healthyEndpoints:
 );
 
 const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatusProps: Function; getTrendIcon: Function; appliedStartDate: Date | null; appliedEndDate: Date | null; themeMode: 'light' | 'dark' }> = ({ endpoints, getStatusProps, getTrendIcon, appliedStartDate, appliedEndDate, themeMode }) => {
-  // Filter endpoints based on the last checked date within the selected range
   const filteredEndpoints = useMemo(() => {
     if (!appliedStartDate || !appliedEndDate) {
       return endpoints;
@@ -497,15 +477,13 @@ const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatus
     );
   }, [endpoints, appliedStartDate, appliedEndDate]);
 
-  // Helper to get error rate color (updated for counts)
   const getErrorRateColor = (errorCount: number) => {
     const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
-    if (errorCount > 10) return currentTheme.palette.error.main; // More than 10 errors is critical
-    if (errorCount > 3) return currentTheme.palette.warning.main; // More than 3 errors is warning
-    return currentTheme.palette.success.main; // 0-3 errors is healthy
+    if (errorCount > 10) return currentTheme.palette.error.main;
+    if (errorCount > 3) return currentTheme.palette.warning.main;
+    return currentTheme.palette.success.main;
   };
 
-  // Helper to get traffic indicator color (duplicated from OverallApiStatusGrid for self-containment)
   const getTrafficColor = (traffic: number) => {
     const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
     if (traffic > 200) return currentTheme.palette.primary.main;
@@ -513,7 +491,6 @@ const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatus
     return currentTheme.palette.success.main;
   };
 
-  // Helper to calculate average from history based on date range (duplicated from OverallApiStatusGrid for self-containment)
   const calculateAverage = (history: HistoryDataPoint[], startDate: Date | null, endDate: Date | null) => {
     let filteredHistory = history;
     if (startDate && endDate) {
@@ -544,8 +521,8 @@ const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatus
                 <TableCell align="right" sx={{ minWidth: '30px' }}>Internal Latency (ms)</TableCell>
                 <TableCell align="right" sx={{ minWidth: '60px' }}>External Latency (ms)</TableCell>
                 <TableCell align="right" sx={{ minWidth: '80px' }}>Baseline (ms)</TableCell>
-                <TableCell align="right" sx={{ minWidth: '100px' }}>Current Errors</TableCell> {/* Changed header */}
-                <TableCell align="right" sx={{ minWidth: '100px' }}>Avg Errors</TableCell> {/* Changed header */}
+                <TableCell align="right" sx={{ minWidth: '100px' }}>Current Errors</TableCell>
+                <TableCell align="right" sx={{ minWidth: '100px' }}>Avg Errors</TableCell>
                 <TableCell align="right" sx={{ minWidth: '80px' }}>Traffic (RPS)</TableCell>
                 <TableCell align="center" sx={{ minWidth: '100px' }}>Last Checked</TableCell>
               </TableRow></TableHead>
@@ -636,7 +613,6 @@ const AutomatedSelfHealingActions: React.FC = () => (
   </Card>
 );
 
-// Interface for User data
 interface User {
   id: string;
   name: string;
@@ -647,7 +623,6 @@ interface User {
   contact: string;
 }
 
-// Dummy User data for a single logged-in user
 const loggedInUser: User = {
   id: 'user-123',
   name: 'John Doe',
@@ -658,7 +633,6 @@ const loggedInUser: User = {
   contact: '+1-555-123-4567',
 };
 
-// UserProfileTable Component
 const UserProfileTable: React.FC = () => {
   return (
     <Card>
@@ -668,7 +642,6 @@ const UserProfileTable: React.FC = () => {
         </Typography>
         <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
           <Table aria-label="user profile table">
-            {/* Ensure no whitespace/newlines between TableBody and the mapped TableRow */}
             <TableBody><TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold', width: '30%' }}>User ID</TableCell><TableCell>{loggedInUser.id}</TableCell></TableRow>
               <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Name</TableCell><TableCell>{loggedInUser.name}</TableCell></TableRow>
               <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Email</TableCell><TableCell>{loggedInUser.email}</TableCell></TableRow>
@@ -684,8 +657,6 @@ const UserProfileTable: React.FC = () => {
   );
 };
 
-
-// Navigation component
 interface SidebarNavProps {
   onSelectView: (view: string) => void;
   activeView: string;
@@ -700,7 +671,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, theme
     { id: 'summary', text: 'Overall Summary', icon: <DashboardIcon /> },
     { id: 'notifications', text: 'Notifications', icon: <NotificationsIcon /> },
     { id: 'selfHealing', text: 'Self-Healing', icon: <AutoFixHighIcon /> },
-    { id: 'user_profile', text: 'User Profile', icon: <PersonIcon /> }, // New User Profile tab
+    { id: 'user_profile', text: 'User Profile', icon: <PersonIcon /> },
   ];
 
   return (
@@ -750,7 +721,6 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, theme
   );
 };
 
-// Function to format a Date object toYYYY-MM-DD string
 const formatDateToYYYYMMDD = (date: Date | null): string => {
   if (!date) return '';
   const year = date.getFullYear();
@@ -759,7 +729,6 @@ const formatDateToYYYYMMDD = (date: Date | null): string => {
   return `${year}-${month}-${day}`;
 };
 
-// Custom Mini Trend Graph component
 interface MiniTrendGraphProps {
   history: HistoryDataPoint[];
   label: string;
@@ -772,7 +741,6 @@ interface MiniTrendGraphProps {
 
 const MiniTrendGraph: React.FC<MiniTrendGraphProps> = ({ history, label, unit, color, appliedStartDate, appliedEndDate, themeMode }) => {
   const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
-  // Filter history based on selected date range
   const filteredHistory = useMemo(() => {
     if (!appliedStartDate || !appliedEndDate) {
       return history;
@@ -829,7 +797,6 @@ const MiniTrendGraph: React.FC<MiniTrendGraphProps> = ({ history, label, unit, c
   );
 };
 
-// ErrorRateTrends component
 interface ErrorRateTrendsProps {
   endpoints: Endpoint[];
   appliedStartDate: Date | null;
@@ -857,15 +824,15 @@ const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ endpoints, appliedSta
                 </Typography>
                 <MiniTrendGraph
                   history={endpoint.errorRateHistory}
-                  label="Errors" // Changed label
-                  unit="errors" // Changed unit
+                  label="Errors"
+                  unit="errors"
                   color={currentTheme.palette.error.main}
                   appliedStartDate={appliedStartDate}
                   appliedEndDate={appliedEndDate}
                   themeMode={themeMode}
                 />
                 <Typography variant="body2" component="span" sx={{ mt: 1 }}>
-                  Current Errors: <Chip label={`${endpoint.errorRate} errors`} size="small" color={endpoint.errorRate > 10 ? 'error' : endpoint.errorRate > 3 ? 'warning' : 'success'} /> {/* Updated label */}
+                  Current Errors: <Chip label={`${endpoint.errorRate} errors`} size="small" color={endpoint.errorRate > 10 ? 'error' : endpoint.errorRate > 3 ? 'warning' : 'success'} />
                 </Typography>
               </CardContent>
             </Card>
@@ -885,30 +852,27 @@ const App: React.FC = () => {
   const [appliedStartDate, setAppliedStartDate] = useState<Date | null>(null);
   const [appliedEndDate, setAppliedEndDate] = useState<Date | null>(null);
   const [serverNameFilter, setServerNameFilter] = useState<string>('');
-  const [projectFilter, setProjectFilter] = useState<string>(''); // New state for project filter
+  const [projectFilter, setProjectFilter] = useState<string>('');
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
-  const [selectedTimeRange, setSelectedTimeRange] = useState<string>(''); // Reintroduced state
+  const [selectedTimeRange, setSelectedTimeRange] = useState<string>('');
 
   const currentTheme = useMemo(() => themeMode === 'light' ? lightTheme : darkTheme, [themeMode]);
 
   const uniqueServerNames = useMemo(() => {
-    // Filter server names based on the selected project
     if (projectFilter) {
       const names = new Set(initialEndpoints.filter(e => e.projectName === projectFilter).map(e => e.serverName));
       return Array.from(names).sort();
     }
     const names = new Set(initialEndpoints.map(e => e.serverName));
     return Array.from(names).sort();
-  }, [initialEndpoints, projectFilter]); // Added projectFilter to dependencies
+  }, [initialEndpoints, projectFilter]);
 
-  const uniqueProjectNames = useMemo(() => { // New memoized list for project names
+  const uniqueProjectNames = useMemo(() => {
     const names = new Set(initialEndpoints.map(e => e.projectName));
     return Array.from(names).sort();
   }, []);
 
   useEffect(() => {
-    // Initial data is already set via `initialEndpoints` state.
-    // So, we can set loading to false immediately.
     setLoading(false);
 
     const interval = setInterval(() => {
@@ -916,10 +880,6 @@ const App: React.FC = () => {
         prevEndpoints.map((endpoint) => {
           const internalResult = simulateApiCall(endpoint.baselineLatency);
           const externalResult = simulateApiCall(endpoint.baselineLatency * 1.2);
-
-          // The history arrays (internalLatencyHistory, externalLatencyHistory, errorRateHistory)
-          // are intentionally NOT updated here. They will retain their initial values
-          // generated by `generateInitialEndpoints` to ensure static trends.
 
           return {
             ...endpoint,
@@ -929,16 +889,13 @@ const App: React.FC = () => {
             externalHealth: externalResult.health,
             errorRate: internalResult.errorRate,
             traffic: internalResult.traffic,
-            // lastChecked is intentionally NOT updated here to allow historical filtering on it
-            // The history arrays themselves are also not updated here to keep trends static.
           };
         })
       );
-    }, 3000); // Update current metrics every 3 seconds
+    }, 3000);
 
     return () => clearInterval(interval);
-  }, []); // Empty dependency array means this effect runs once on mount
-
+  }, []);
 
   const totalEndpoints = endpoints.length;
   const healthyEndpoints = endpoints.filter(
@@ -995,7 +952,7 @@ const App: React.FC = () => {
     let newAppliedEndDate: Date | null = null;
 
     if (selectedTimeRange) {
-      newAppliedEndDate = now; // End date is current time for time ranges
+      newAppliedEndDate = now;
       switch (selectedTimeRange) {
         case '1min':
           newAppliedStartDate = new Date(now.getTime() - 1 * 60 * 1000);
@@ -1012,30 +969,28 @@ const App: React.FC = () => {
         case '3hours':
           newAppliedStartDate = new Date(now.getTime() - 3 * 60 * 60 * 1000);
           break;
-        case '1day': // Last 24 hours
+        case '1day':
           newAppliedStartDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
           break;
-        case '1week': // Last 7 days
+        case '1week':
           newAppliedStartDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
           break;
-        case '1month': // Last 30 days
+        case '1month':
           newAppliedStartDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
           break;
         default:
           break;
       }
-      // Clear manual date inputs when a time range is selected
       setStartDateString('');
       setEndDateString('');
     } else {
-      // Apply manual date filter if no time range is selected
       if (startDateString) {
         newAppliedStartDate = new Date(startDateString);
-        newAppliedStartDate.setHours(0, 0, 0, 0); // Start of the day
+        newAppliedStartDate.setHours(0, 0, 0, 0);
       }
       if (endDateString) {
         newAppliedEndDate = new Date(endDateString);
-        newAppliedEndDate.setHours(23, 59, 59, 999); // End of the day
+        newAppliedEndDate.setHours(23, 59, 59, 999);
       }
     }
 
@@ -1049,11 +1004,10 @@ const App: React.FC = () => {
     setAppliedStartDate(null);
     setAppliedEndDate(null);
     setServerNameFilter('');
-    setProjectFilter(''); // Clear project filter
-    setSelectedTimeRange(''); // Clear time range as well
+    setProjectFilter('');
+    setSelectedTimeRange('');
   };
 
-  // Filter endpoints by project name first
   const filteredEndpointsByProject = useMemo(() => {
     if (!projectFilter) {
       return endpoints;
@@ -1061,7 +1015,6 @@ const App: React.FC = () => {
     return endpoints.filter(endpoint => endpoint.projectName === projectFilter);
   }, [endpoints, projectFilter]);
 
-  // Then filter by server name
   const filteredEndpointsByServer = useMemo(() => {
     if (!serverNameFilter) {
       return filteredEndpointsByProject;
@@ -1069,7 +1022,6 @@ const App: React.FC = () => {
     return filteredEndpointsByProject.filter(endpoint => endpoint.serverName === serverNameFilter);
   }, [filteredEndpointsByProject, serverNameFilter]);
 
-  // Then apply the date range filter based on endpoint.lastChecked
   const displayEndpoints = useMemo(() => {
     let currentEndpoints = filteredEndpointsByServer;
 
@@ -1082,7 +1034,6 @@ const App: React.FC = () => {
     }
     return currentEndpoints;
   }, [filteredEndpointsByServer, appliedStartDate, appliedEndDate]);
-
 
   const toggleTheme = () => {
     setThemeMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
@@ -1115,10 +1066,8 @@ const App: React.FC = () => {
             </IconButton>
           </Box>
 
-          {/* Conditional rendering of filter options */}
           {(activeView === 'table' || activeView === 'summary' || activeView === 'error_trends') && (
             <Box sx={{ display: 'flex', gap: 1, mb: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-              {/* Project Dropdown */}
               <FormControl sx={{ minWidth: 120 }}>
                 <InputLabel id="project-select-label">Project</InputLabel>
                 <Select
@@ -1128,7 +1077,7 @@ const App: React.FC = () => {
                   label="Project"
                   onChange={(e) => {
                     setProjectFilter(e.target.value as string);
-                    setServerNameFilter(''); // Clear server filter when project changes
+                    setServerNameFilter('');
                   }}
                   sx={{ borderRadius: 2 }}
                 >
@@ -1141,7 +1090,6 @@ const App: React.FC = () => {
                 </Select>
               </FormControl>
 
-              {/* Server Dropdown */}
               <FormControl sx={{ minWidth: 120 }}>
                 <InputLabel id="server-name-select-label">Server</InputLabel>
                 <Select
@@ -1161,7 +1109,6 @@ const App: React.FC = () => {
                 </Select>
               </FormControl>
 
-              {/* Time Range Dropdown */}
               <FormControl sx={{ minWidth: 120 }}>
                 <InputLabel id="time-range-select-label">Time Range</InputLabel>
                 <Select
@@ -1186,7 +1133,6 @@ const App: React.FC = () => {
                 </Select>
               </FormControl>
 
-              {/* Start Date */}
               <TextField
                 label="From Date"
                 type="date"
@@ -1194,7 +1140,6 @@ const App: React.FC = () => {
                 onChange={(e) => { setStartDateString(e.target.value); setSelectedTimeRange(''); }}
                 InputLabelProps={{ shrink: true }}
               />
-              {/* End Date */}
               <TextField
                 label="To Date"
                 type="date"
@@ -1205,14 +1150,14 @@ const App: React.FC = () => {
               <Button
                 variant="contained"
                 onClick={handleApplyFilter}
-                sx={{ height: '40px', px: 2, borderRadius: 2 }} /* Reduced height to 40px */
+                sx={{ height: '40px', px: 2, borderRadius: 2 }}
               >
                 Apply
               </Button>
               <Button
                 variant="outlined"
                 onClick={handleClearFilters}
-                sx={{ height: '40px', px: 2, borderRadius: 2 }} /* Reduced height to 40px */
+                sx={{ height: '40px', px: 2, borderRadius: 2 }}
               >
                 Clear
               </Button>
@@ -1257,7 +1202,7 @@ const App: React.FC = () => {
 
           {activeView === 'notifications' && <NotificationAlerting />}
           {activeView === 'selfHealing' && <AutomatedSelfHealingActions />}
-          {activeView === 'user_profile' && <UserProfileTable />} {/* Render UserProfileTable */}
+          {activeView === 'user_profile' && <UserProfileTable />}
         </Container>
       </Box>
     </ThemeProvider>
