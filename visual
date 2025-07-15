@@ -37,6 +37,7 @@ import {
   DialogContent, // Added for confirmation dialog
   DialogActions, // Added for confirmation dialog
   Grid,
+  InputAdornment, // Added InputAdornment
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -556,7 +557,6 @@ const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatus
                   </TableCell>
                   <TableCell align="right">{endpoint.baselineLatency}</TableCell>
                   <TableCell align="right" sx={{ color: getErrorRateColor(endpoint.errorRate), fontWeight: 500 }}>{endpoint.errorRate}</TableCell>
-                  <TableCell align="right">{calculateAverage(endpoint.errorRateHistory, appliedStartDate, appliedEndDate)}</TableCell>
                   <TableCell align="right" sx={{ color: getTrafficColor(endpoint.traffic), fontWeight: 500 }}>{endpoint.traffic}</TableCell>
                   <TableCell align="center">{endpoint.lastChecked ? endpoint.lastChecked.toLocaleString() : 'N/A'}</TableCell>
                 </TableRow>
@@ -1315,6 +1315,13 @@ const App: React.FC = () => {
                 value={startDateString}
                 onChange={(e) => { setStartDateString(e.target.value); setSelectedTimeRange(''); }}
                 InputLabelProps={{ shrink: true }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <CalendarTodayIcon color="primary" />
+                    </InputAdornment>
+                  ),
+                }}
               />
               {/* End Date */}
               <TextField
@@ -1323,6 +1330,13 @@ const App: React.FC = () => {
                 value={endDateString}
                 onChange={(e) => { setEndDateString(e.target.value); setSelectedTimeRange(''); }}
                 InputLabelProps={{ shrink: true }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <CalendarTodayIcon color="primary" />
+                    </InputAdornment>
+                  ),
+                }}
               />
               <Button
                 variant="contained"
