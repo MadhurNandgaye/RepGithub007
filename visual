@@ -222,6 +222,21 @@ const darkTheme = createTheme({
         },
       },
     },
+    // Added style overrides for TextField to attempt to style native date input icon
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          // Target the native calendar picker indicator for WebKit browsers
+          '& .MuiInputBase-input[type="date"]::-webkit-calendar-picker-indicator': {
+            filter: 'invert(1)', // Invert color for dark theme
+          },
+          // Ensure the input text color is white in dark theme
+          '& .MuiInputBase-input[type="date"]': {
+            color: '#ffffff',
+          },
+        },
+      },
+    },
   },
 });
 
@@ -740,14 +755,6 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, theme
       </Box>
     </Box>
   );
-};
-
-const formatDateToYYYYMMDD = (date: Date | null): string => {
-  if (!date) return '';
-  const year = date.getFullYear();
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const day = date.getDate().toString().padStart(2, '0');
-  return `${year}-${month}-${day}`;
 };
 
 interface MiniTrendGraphProps {
@@ -1284,14 +1291,14 @@ const App: React.FC = () => {
               </FormControl>
 
               {/* Time Range Dropdown */}
-              <FormControl sx={{ minWidth: 120 }}>
+              <FormControl sx={{ minWidth: 130 }}>
                 <InputLabel id="time-range-select-label">Time Range</InputLabel>
                 <Select
                   labelId="time-range-select-label"
                   id="time-range-select"
                   value={selectedTimeRange}
                   label="Time Range"
-                  onChange={(e) => { setSelectedTimeRange(e.target.value as string); setStartDateString(''); setEndDateString(''); }}
+                  onChange={(e) => { setSelectedTimeRange(e.target.value as string); }}
                   sx={{ borderRadius: 2 }}
                 >
                   <MenuItem value="">
@@ -1315,13 +1322,7 @@ const App: React.FC = () => {
                 value={startDateString}
                 onChange={(e) => { setStartDateString(e.target.value); setSelectedTimeRange(''); }}
                 InputLabelProps={{ shrink: true }}
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <CalendarTodayIcon color="primary" />
-                    </InputAdornment>
-                  ),
-                }}
+                inputProps={{ id: 'startDateInput' }} // Added ID for programmatic focus
               />
               {/* End Date */}
               <TextField
@@ -1330,13 +1331,7 @@ const App: React.FC = () => {
                 value={endDateString}
                 onChange={(e) => { setEndDateString(e.target.value); setSelectedTimeRange(''); }}
                 InputLabelProps={{ shrink: true }}
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <CalendarTodayIcon color="primary" />
-                    </InputAdornment>
-                  ),
-                }}
+                inputProps={{ id: 'endDateInput' }} // Added ID for programmatic focus
               />
               <Button
                 variant="contained"
