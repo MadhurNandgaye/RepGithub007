@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Container,
   Typography,
@@ -32,6 +32,10 @@ import {
   FormControl,
   InputLabel,
   IconButton,
+  Dialog, // Added for confirmation dialog
+  DialogTitle, // Added for confirmation dialog
+  DialogContent, // Added for confirmation dialog
+  DialogActions, // Added for confirmation dialog
   Grid,
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
@@ -52,6 +56,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import { Brightness4 as Brightness4Icon, Brightness7 as Brightness7Icon } from '@mui/icons-material';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 
+
 import {
   AreaChart,
   Area,
@@ -61,6 +66,7 @@ import {
   YAxis,
 } from 'recharts';
 import { blueGrey } from '@mui/material/colors';
+
 
 const lightTheme = createTheme({
   typography: {
@@ -300,6 +306,7 @@ const generateInitialEndpoints = (): Endpoint[] => {
         const baseline = Math.floor(Math.random() * (250 - 50 + 1)) + 50;
         const randomMethod = httpMethods[Math.floor(Math.random() * httpMethods.length)];
         const randomPath = apiPaths[Math.floor(Math.random() * apiPaths.length)];
+        
         const endpointName = `${randomMethod} ${randomPath} (Endpoint ${e})`;
 
         const now = new Date();
@@ -332,6 +339,7 @@ const generateInitialEndpoints = (): Endpoint[] => {
 };
 
 const initialEndpoints: Endpoint[] = generateInitialEndpoints();
+
 
 const simulateApiCall = (baseline: number): { latency: number; health: 'Red' | 'Yellow' | 'Green'; errorRate: number; traffic: number } => {
   const randomFactor = Math.random();
@@ -657,13 +665,15 @@ const UserProfileTable: React.FC = () => {
   );
 };
 
+
 interface SidebarNavProps {
   onSelectView: (view: string) => void;
   activeView: string;
   themeMode: 'dark' | 'light';
+  onLogoutRequest: () => void; // Changed prop name
 }
 
-const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, themeMode }) => {
+const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, themeMode, onLogoutRequest }) => {
   const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
   const navItems = [
     { id: 'table', text: 'Endpoint Table', icon: <TableChartIcon /> },
@@ -717,6 +727,17 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, theme
           </ListItem>
         ))}
       </List>
+      <Box sx={{ mt: 3, px: 1 }}>
+        <Button
+          variant="outlined"
+          color="inherit"
+          onClick={onLogoutRequest} // Call the request function
+          fullWidth
+          sx={{ borderRadius: 2 }}
+        >
+          Logout
+        </Button>
+      </Box>
     </Box>
   );
 };
@@ -843,6 +864,124 @@ const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ endpoints, appliedSta
   );
 };
 
+interface LoginPageProps {
+  onLoginSuccess: () => void;
+  themeMode: 'light' | 'dark';
+}
+
+// Helper to convert hex to rgba
+const hexToRgba = (hex: string, alpha: number) => {
+  let r = 0, g = 0, b = 0;
+  // Ensure hex is a string
+  if (typeof hex !== 'string') {
+    hex = String(hex);
+  }
+  // Handle #RRGGBB or #RGB
+  if (hex.length === 7) {
+    r = parseInt(hex.substring(1, 3), 16);
+    g = parseInt(hex.substring(3, 5), 16);
+    b = parseInt(hex.substring(5, 7), 16);
+  } else if (hex.length === 4) {
+    r = parseInt(hex[1] + hex[1], 16);
+    g = parseInt(hex[2] + hex[2], 16);
+    b = parseInt(hex[3] + hex[3], 16);
+  }
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, themeMode }) => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const currentTheme = useMemo(() => themeMode === 'light' ? lightTheme : darkTheme, [themeMode]);
+
+  const handleLogin = (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+    if (username === 'user' && password === 'password') {
+      onLoginSuccess();
+    } else {
+      setError('Invalid username or password');
+    }
+  };
+
+  return (
+    <Container component="main" maxWidth="xs" sx={{
+      height: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      bgcolor: currentTheme.palette.background.default,
+      p: 2,
+    }}>
+      <Card sx={{
+        p: { xs: 3, sm: 4 },
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        borderRadius: 3,
+        boxShadow: 6,
+        width: '100%',
+        maxWidth: 400,
+        bgcolor: hexToRgba(currentTheme.palette.primary.main, 0.3), // Transparent primary color
+      }}>
+        <Box sx={{ mb: 3, textAlign: 'center' }}>
+          <Typography component="h1" variant="h4" sx={{ fontWeight: 'bold', color: currentTheme.palette.primary.contrastText }}>
+            API Dashboard
+          </Typography>
+          <Typography variant="subtitle1" sx={{ color: currentTheme.palette.primary.contrastText }}>
+            Sign in to continue
+          </Typography>
+        </Box>
+        <Box component="form" onSubmit={handleLogin} noValidate sx={{ width: '100%' }}>
+          <TextField
+            margin="normal"
+            required
+            fullWidth
+            id="username"
+            label="Username"
+            name="username"
+            autoComplete="username"
+            autoFocus
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="normal"
+            required
+            fullWidth
+            name="password"
+            label="Password"
+            type="password"
+            id="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            sx={{ mb: 3 }}
+          />
+          {error && (
+            <Alert severity="error" sx={{ mt: 2, mb: 1, width: '100%' }}>
+              {error}
+            </Alert>
+          )}
+          <Button
+            type="submit"
+            fullWidth
+            variant="contained"
+            size="large"
+            sx={{ mt: 3, mb: 2, borderRadius: 2 }}
+          >
+            Sign In
+          </Button>
+        </Box>
+      </Card>
+    </Container>
+  );
+};
+
+
 const App: React.FC = () => {
   const [endpoints, setEndpoints] = useState<Endpoint[]>(initialEndpoints);
   const [loading, setLoading] = useState<boolean>(true);
@@ -855,6 +994,8 @@ const App: React.FC = () => {
   const [projectFilter, setProjectFilter] = useState<string>('');
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
   const [selectedTimeRange, setSelectedTimeRange] = useState<string>('');
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false); // New state for logout confirmation
 
   const currentTheme = useMemo(() => themeMode === 'light' ? lightTheme : darkTheme, [themeMode]);
 
@@ -896,6 +1037,7 @@ const App: React.FC = () => {
 
     return () => clearInterval(interval);
   }, []);
+
 
   const totalEndpoints = endpoints.length;
   const healthyEndpoints = endpoints.filter(
@@ -1035,8 +1177,28 @@ const App: React.FC = () => {
     return currentEndpoints;
   }, [filteredEndpointsByServer, appliedStartDate, appliedEndDate]);
 
+
   const toggleTheme = () => {
     setThemeMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
+  };
+
+  const handleLoginSuccess = () => {
+    setIsLoggedIn(true);
+  };
+
+  const handleLogoutRequest = () => { // Function to open the confirmation dialog
+    setShowLogoutConfirm(true);
+  };
+
+  const handleConfirmLogout = () => { // Function to handle actual logout
+    setIsLoggedIn(false);
+    setActiveView('table');
+    handleClearFilters();
+    setShowLogoutConfirm(false); // Close dialog after logout
+  };
+
+  const handleCancelLogout = () => { // Function to cancel logout
+    setShowLogoutConfirm(false);
   };
 
   if (loading) {
@@ -1051,11 +1213,20 @@ const App: React.FC = () => {
     );
   }
 
+  if (!isLoggedIn) {
+    return (
+      <ThemeProvider theme={currentTheme}>
+        <CssBaseline />
+        <LoginPage onLoginSuccess={handleLoginSuccess} themeMode={themeMode} />
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider theme={currentTheme}>
       <CssBaseline />
       <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
-        <SidebarNav onSelectView={setActiveView} activeView={activeView} themeMode={themeMode} />
+        <SidebarNav onSelectView={setActiveView} activeView={activeView} themeMode={themeMode} onLogoutRequest={handleLogoutRequest} />
         <Container maxWidth="xl" sx={{ flexGrow: 1, p: 3, overflowY: 'auto' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
             <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 'bold', color: currentTheme.palette.text.primary }}>
@@ -1066,8 +1237,10 @@ const App: React.FC = () => {
             </IconButton>
           </Box>
 
+          {/* Conditional rendering of filter options */}
           {(activeView === 'table' || activeView === 'summary' || activeView === 'error_trends') && (
             <Box sx={{ display: 'flex', gap: 1, mb: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Project Dropdown */}
               <FormControl sx={{ minWidth: 120 }}>
                 <InputLabel id="project-select-label">Project</InputLabel>
                 <Select
@@ -1090,6 +1263,7 @@ const App: React.FC = () => {
                 </Select>
               </FormControl>
 
+              {/* Server Dropdown */}
               <FormControl sx={{ minWidth: 120 }}>
                 <InputLabel id="server-name-select-label">Server</InputLabel>
                 <Select
@@ -1109,6 +1283,7 @@ const App: React.FC = () => {
                 </Select>
               </FormControl>
 
+              {/* Time Range Dropdown */}
               <FormControl sx={{ minWidth: 120 }}>
                 <InputLabel id="time-range-select-label">Time Range</InputLabel>
                 <Select
@@ -1133,6 +1308,7 @@ const App: React.FC = () => {
                 </Select>
               </FormControl>
 
+              {/* Start Date */}
               <TextField
                 label="From Date"
                 type="date"
@@ -1140,6 +1316,7 @@ const App: React.FC = () => {
                 onChange={(e) => { setStartDateString(e.target.value); setSelectedTimeRange(''); }}
                 InputLabelProps={{ shrink: true }}
               />
+              {/* End Date */}
               <TextField
                 label="To Date"
                 type="date"
@@ -1205,6 +1382,29 @@ const App: React.FC = () => {
           {activeView === 'user_profile' && <UserProfileTable />}
         </Container>
       </Box>
+
+      {/* Logout Confirmation Dialog */}
+      <Dialog
+        open={showLogoutConfirm}
+        onClose={handleCancelLogout}
+        aria-labelledby="logout-dialog-title"
+        aria-describedby="logout-dialog-description"
+      >
+        <DialogTitle id="logout-dialog-title">{"Confirm Logout"}</DialogTitle>
+        <DialogContent>
+          <Typography id="logout-dialog-description">
+            Are you sure you want to log out?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelLogout} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmLogout} color="primary" autoFocus>
+            Logout
+          </Button>
+        </DialogActions>
+      </Dialog>
     </ThemeProvider>
   );
 };
