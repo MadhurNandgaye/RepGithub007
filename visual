@@ -122,44 +122,61 @@ interface Endpoint {
 const MONITOR_API_URL = 'https://localhost:7278/Monitor/GetDataFromAppInsights';
 
 /**
- * Fetches data from the new Monitor API using a POST request.
+ * Helper function to format a Date object into DD/MM/YYYY string.
+ * @param {Date} date - The date object to format.
+ * @returns {string} The formatted date string.
+ */
+const formatDateToDDMMYYYY = (date: Date): string => {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
+/**
+ * Fetches data from the new Monitor API using a GET request with query parameters.
  *
  * @param {DataFilters} filters - An object containing filters for the data.
  * @returns {Promise<BookResult[]>} A promise that resolves with an array of BookResult objects.
  */
 const fetchFilteredDataFromAPI = async (filters: DataFilters): Promise<BookResult[]> => {
   const projectName = filters.project || '';
-  const fromDate = filters.startDate ? filters.startDate.toISOString() : null;
-  const toDate = filters.endDate ? filters.endDate.toISOString() : null;
-  const timespan = filters.timespan || null; // Use the provided timespan
+  const timespan = filters.timespan || null;
 
   if (!projectName) {
     console.log('fetchFilteredDataFromAPI: No project filter provided, skipping API call.');
     return [];
   }
 
-  const payload = {
-    projectName: projectName,
-    fromDate: fromDate,
-    toDate: toDate,
-    timespan: timespan,
-  };
+  const params = new URLSearchParams();
+  params.append('ProjectName', projectName);
 
-  console.log('fetchFilteredDataFromAPI: Making POST request to:', MONITOR_API_URL);
-  console.log('fetchFilteredDataFromAPI: Payload being sent:', payload);
+  // Add FromDate and ToDate only if timespan is not provided
+  if (!timespan) {
+    if (filters.startDate) {
+      params.append('FromDate', formatDateToDDMMYYYY(filters.startDate));
+    }
+    if (filters.endDate) {
+      params.append('ToDate', formatDateToDDMMYYYY(filters.endDate));
+    }
+  }
+
+  // Add Timespan if provided
+  if (timespan) {
+    params.append('Timespan', timespan);
+  }
+
+  const apiUrlWithQuery = `${MONITOR_API_URL}?${params.toString()}`;
+
+  console.log('fetchFilteredDataFromAPI: Making GET request to:', apiUrlWithQuery);
+  console.log('fetchFilteredDataFromAPI: Query parameters being sent:', Object.fromEntries(params.entries())); // Log the parameters object
 
   try {
     // NOTE: This API call will likely fail in the browser due to CORS and localhost.
     // This is for demonstration of the request structure.
-    const response = await axios.post(MONITOR_API_URL, payload, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      // You might need to adjust withCredentials or other CORS settings depending on your backend
-      // withCredentials: true,
-    });
+    const response = await axios.get(apiUrlWithQuery);
 
-    console.log(`fetchFilteredDataFromAPI: API call to ${MONITOR_API_URL} successful. Response:`, response.data);
+    console.log(`fetchFilteredDataFromAPI: API call to ${apiUrlWithQuery} successful. Response:`, response.data);
 
     // --- IMPORTANT: Adjust this section based on your actual API response structure ---
     // The following is a placeholder mapping from a hypothetical response structure
@@ -550,7 +567,6 @@ const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatus
                 <TableCell align="right" sx={{ minWidth: '60px' }}>External Latency (ms)</TableCell>
                 <TableCell align="right" sx={{ minWidth: '80px' }}>Baseline (ms)</TableCell>
                 <TableCell align="right" sx={{ minWidth: '100px' }}>Current Errors</TableCell>
-                {/* Removed Avg Errors column */}
                 <TableCell align="right" sx={{ minWidth: '80px' }}>Traffic (RPS)</TableCell>
                 <TableCell align="center" sx={{ minWidth: '100px' }}>Last Checked</TableCell>
               </TableRow></TableHead>
@@ -1286,7 +1302,7 @@ const App: React.FC = () => {
       timespanToSend = null;
     }
 
-    // Default to "24 Hours" if no specific dates or time range are set
+    // Default to "24 Hours" if no specific dates or time range are set AND no specific dates are picked
     if (!timespanToSend && !newAppliedStartDate && !newAppliedEndDate) {
       timespanToSend = "24 Hours";
     }
