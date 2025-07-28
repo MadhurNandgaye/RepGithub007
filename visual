@@ -92,7 +92,7 @@ interface MonitorDataResult {
   successCount: number;
   failureCount: number;
   latency: string; // Maps to "avgDurationMs", keeping as string as per sample
-  status: string; // Added new status field
+  // Removed status field
   // Add any other properties your backend API returns if not already here
 }
 
@@ -183,7 +183,7 @@ const fetchFilteredDataFromAPI = async (filters: DataFilters): Promise<MonitorDa
         successCount: item.successCount !== undefined ? Number(item.successCount) : 0,
         failureCount: item.failureCount !== undefined ? Number(item.failureCount) : 0,
         latency: item.avgDurationMs !== undefined ? String(item.avgDurationMs) : 'N/A', // Mapping 'avgDurationMs' to 'latency'
-        status: item.status || 'Unknown', // Mapping 'status' from API to 'status'
+        // Removed status: item.status || 'Unknown', // Mapping 'status' from API to 'status'
       }));
     } else if (response.data && typeof response.data === 'object' && Object.keys(response.data).length > 0) {
         // If your API returns a single object (not an array of objects)
@@ -195,7 +195,7 @@ const fetchFilteredDataFromAPI = async (filters: DataFilters): Promise<MonitorDa
             successCount: item.successCount !== undefined ? Number(item.successCount) : 0,
             failureCount: item.failureCount !== undefined ? Number(item.failureCount) : 0,
             latency: item.avgDurationMs !== undefined ? String(item.avgDurationMs) : 'N/A',
-            status: item.status || 'Unknown',
+            // Removed status: item.status || 'Unknown',
         }];
     }
     // --- End of IMPORTANT section ---
@@ -536,12 +536,12 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
                 <TableCell align="right">Success Count</TableCell>
                 <TableCell align="right">Failure Count</TableCell>
                 <TableCell align="right">Latency</TableCell> {/* Renamed column header */}
-                <TableCell>Status</TableCell> {/* Added new Status column */}
+                {/* Removed Status column header */}
               </TableRow></TableHead>
             <TableBody>
               {monitorRecords.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center"> {/* Updated colspan */}
+                  <TableCell colSpan={6} align="center"> {/* Updated colspan from 7 to 6 */}
                     No API records found for the selected filters.
                   </TableCell>
                 </TableRow>
@@ -563,7 +563,7 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
                     >
                       {record.latency}
                     </TableCell> {/* Updated data field */}
-                    <TableCell>{record.status}</TableCell> {/* Display status */}
+                    {/* Removed status cell */}
                   </TableRow>
                 ))
               )}
