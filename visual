@@ -76,14 +76,15 @@ import { blueGrey } from '@mui/material/colors';
  */
 interface DataFilters {
   project?: string;
-  server?: string;
+  server?: string; // This will not be sent to the new API, but kept for UI state
   startDate?: Date | null;
   endDate?: Date | null;
+  timespan?: string | null; // New field for the API
 }
 
 /**
  * Interface for the structure of the data records.
- * This will now represent a simplified book item from Google Books API.
+ * This will now represent a simplified book item for demonstration.
  */
 interface BookResult {
   id: string;
@@ -117,39 +118,89 @@ interface Endpoint {
   projectName: string;
 }
 
-// Google Books API base URL
-const GOOGLE_BOOKS_API_URL = 'https://www.googleapis.com/books/v1/volumes';
+// New API endpoint
+const MONITOR_API_URL = 'https://localhost:7278/Monitor/GetDataFromAppInsights';
 
 /**
- * Fetches data from the Google Books API.
- * The 'project' filter will be used as the search query.
+ * Fetches data from the new Monitor API using a POST request.
  *
  * @param {DataFilters} filters - An object containing filters for the data.
  * @returns {Promise<BookResult[]>} A promise that resolves with an array of BookResult objects.
  */
 const fetchFilteredDataFromAPI = async (filters: DataFilters): Promise<BookResult[]> => {
-  const query = filters.project || 'programming'; // Default search query
-  const maxResults = 10;
-  const apiUrl = `${GOOGLE_BOOKS_API_URL}?q=${encodeURIComponent(query)}&maxResults=${maxResults}`;
+  const projectName = filters.project || '';
+  const fromDate = filters.startDate ? filters.startDate.toISOString() : null;
+  const toDate = filters.endDate ? filters.endDate.toISOString() : null;
+  const timespan = filters.timespan || null; // Use the provided timespan
+
+  if (!projectName) {
+    console.log('fetchFilteredDataFromAPI: No project filter provided, skipping API call.');
+    return [];
+  }
+
+  const payload = {
+    projectName: projectName,
+    fromDate: fromDate,
+    toDate: toDate,
+    timespan: timespan,
+  };
+
+  console.log('fetchFilteredDataFromAPI: Making POST request to:', MONITOR_API_URL);
+  console.log('fetchFilteredDataFromAPI: Payload being sent:', payload);
 
   try {
-    const response = await axios.get(apiUrl);
-    console.log(`Google Books API call to ${apiUrl} successful. Response:`, response.data);
+    // NOTE: This API call will likely fail in the browser due to CORS and localhost.
+    // This is for demonstration of the request structure.
+    const response = await axios.post(MONITOR_API_URL, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      // You might need to adjust withCredentials or other CORS settings depending on your backend
+      // withCredentials: true,
+    });
 
-    if (response.data && response.data.items) {
-      return response.data.items.map((item: any) => ({
-        id: item.id,
-        title: item.volumeInfo.title || 'N/A',
-        authors: item.volumeInfo.authors ? item.volumeInfo.authors.join(', ') : 'N/A',
-        publishedDate: item.volumeInfo.publishedDate || 'N/A',
-        description: item.volumeInfo.description ? item.volumeInfo.description.substring(0, 100) + '...' : 'N/A',
-        thumbnail: item.volumeInfo.imageLinks?.thumbnail || 'https://placehold.co/60x80/EEEEEE/AAAAAA?text=No+Image',
+    console.log(`fetchFilteredDataFromAPI: API call to ${MONITOR_API_URL} successful. Response:`, response.data);
+
+    // --- IMPORTANT: Adjust this section based on your actual API response structure ---
+    // The following is a placeholder mapping from a hypothetical response structure
+    // to the BookResult interface. You will need to replace this with logic
+    // that correctly parses data from your 'GetDataFromAppInsights' API.
+    if (response.data && Array.isArray(response.data)) {
+      // Assuming your API returns an array of objects that can be mapped to BookResult
+      return response.data.map((item: any, index: number) => ({
+        id: item.id || `mock-id-${index}`,
+        title: item.name || `Mock Title for ${projectName}`,
+        authors: item.user || 'Unknown User',
+        publishedDate: item.timestamp ? new Date(item.timestamp).toISOString().split('T')[0] : 'N/A',
+        description: item.message || 'No description available from mock data.',
+        thumbnail: 'https://placehold.co/60x80/EEEEEE/AAAAAA?text=Data', // Placeholder image
       }));
+    } else if (response.data && typeof response.data === 'object') {
+        // If your API returns a single object that might contain a list, adjust here.
+        // For now, let's just return a single mock item if the response is a non-array object
+        return [{
+            id: 'mock-single-id',
+            title: `Single Mock Result for ${projectName}`,
+            authors: 'API Response',
+            publishedDate: new Date().toISOString().split('T')[0],
+            description: 'This is a single mock result from the API.',
+            thumbnail: 'https://placehold.co/60x80/EEEEEE/AAAAAA?text=Single',
+        }];
     }
-    return [];
+    // --- End of IMPORTANT section ---
+
+    return []; // Return empty array if no data or unexpected structure
   } catch (error) {
-    console.error(`Error fetching data from Google Books API:`, error);
-    return [];
+    console.error(`fetchFilteredDataFromAPI: Error fetching data from ${MONITOR_API_URL}:`, error);
+    // Return a simulated error response for the UI to display something
+    return [{
+        id: 'error-mock',
+        title: 'Error Fetching Data',
+        authors: 'System',
+        publishedDate: new Date().toISOString().split('T')[0],
+        description: `Failed to load data for ${projectName}. Check console for details.`,
+        thumbnail: 'https://placehold.co/60x80/FF0000/FFFFFF?text=Error',
+    }];
   }
 };
 
@@ -325,14 +376,15 @@ const darkTheme = createTheme({
   },
 });
 
-// Dummy data generation for initial filter options (for UI functionality)
-// This data is ONLY used to populate the dropdowns, not the tables.
+// Hardcoded filter options as per user request
+const hardcodedProjectNames = ['DTOCRUAT', 'DTOCRDEV', 'DTOCRSSDEV'];
+const hardcodedServerNames = ['1', '2', '3'];
+
 const generateInitialFilterOptions = (): { projectNames: string[]; serverNames: string[] } => {
-  const projectNames = ['Programming', 'History', 'Science', 'Fiction']; // Example categories for books
-  const serverNames = [ // Example servers, less relevant for Books API but kept for UI structure
-    'Server Alpha', 'Server Beta', 'Server Gamma',
-  ];
-  return { projectNames, serverNames };
+  return {
+    projectNames: hardcodedProjectNames,
+    serverNames: hardcodedServerNames,
+  };
 };
 
 const initialFilterOptions = generateInitialFilterOptions();
@@ -526,7 +578,6 @@ const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatus
                   </TableCell>
                   <TableCell align="right">{endpoint.baselineLatency}</TableCell>
                   <TableCell align="right" sx={{ color: getErrorRateColor(endpoint.errorRate), fontWeight: 500 }}>{endpoint.errorRate}</TableCell>
-                  {/* Removed Avg Errors Cell */}
                   <TableCell align="right" sx={{ color: getTrafficColor(endpoint.traffic), fontWeight: 500 }}>{endpoint.traffic}</TableCell>
                   <TableCell align="center">{endpoint.lastChecked ? new Date(endpoint.lastChecked).toLocaleString() : 'N/A'}</TableCell>
                 </TableRow>
@@ -946,39 +997,16 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, themeMode }) => {
 
 // New FilteredDataDisplay Component
 interface FilteredDataDisplayProps {
+  bookRecords: BookResult[];
+  loading: boolean;
+  error: string | null;
   projectFilter: string;
-  serverNameFilter: string;
-  appliedStartDate: Date | null;
-  appliedEndDate: Date | null;
+  serverNameFilter: string; // Keep for display purposes
+  appliedStartDate: Date | null; // Keep for display purposes
+  appliedEndDate: Date | null; // Keep for display purposes
 }
 
-const FilteredDataDisplay: React.FC<FilteredDataDisplayProps> = ({ projectFilter, serverNameFilter, appliedStartDate, appliedEndDate }) => {
-  const [bookRecords, setBookRecords] = useState<BookResult[]>([]); // Changed to BookResult
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const getData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        // Use fetchFilteredDataFromAPI to get book data
-        const data = await fetchFilteredDataFromAPI({
-          project: projectFilter,
-          server: serverNameFilter, // Not directly used by Google Books API, but kept for interface consistency
-          startDate: appliedStartDate,
-          endDate: appliedEndDate,
-        });
-        setBookRecords(data);
-      } catch (err) {
-        setError(`Failed to fetch data: ${(err as Error).message}`);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    getData();
-  }, [projectFilter, serverNameFilter, appliedStartDate, appliedEndDate]);
+const FilteredDataDisplay: React.FC<FilteredDataDisplayProps> = ({ bookRecords, loading, error, projectFilter, serverNameFilter, appliedStartDate, appliedEndDate }) => {
 
   if (loading) {
     return (
@@ -1002,11 +1030,15 @@ const FilteredDataDisplay: React.FC<FilteredDataDisplayProps> = ({ projectFilter
     <Card>
       <CardContent>
         <Typography variant="h5" gutterBottom>
-          Google Books API Results for "{projectFilter || 'programming'}"
+          API Results for "{projectFilter || 'No Project Selected'}"
         </Typography>
-        {bookRecords.length === 0 ? (
+        {bookRecords.length === 0 && projectFilter === '' ? (
           <Typography variant="body1" color="textSecondary">
-            No book records found matching the selected filters or query.
+            Please select a "Project" and click "Apply" to fetch data.
+          </Typography>
+        ) : bookRecords.length === 0 ? (
+          <Typography variant="body1" color="textSecondary">
+            No records found matching the selected filters.
           </Typography>
         ) : (
           <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
@@ -1052,11 +1084,17 @@ const App: React.FC = () => {
   const [appliedStartDate, setAppliedStartDate] = useState<Date | null>(null);
   const [appliedEndDate, setAppliedEndDate] = useState<Date | null>(null);
   const [serverNameFilter, setServerNameFilter] = useState<string>('');
-  const [projectFilter, setProjectFilter] = useState<string>('');
+  const [projectFilter, setProjectFilter] = useState<string>(''); // Initialized to empty string
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
   const [selectedTimeRange, setSelectedTimeRange] = useState<string>('');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false);
+
+  // State for FilteredDataDisplay's data
+  const [filteredBookRecords, setFilteredBookRecords] = useState<BookResult[]>([]);
+  const [filteredDataLoading, setFilteredDataLoading] = useState(false);
+  const [filteredDataError, setFilteredDataError] = useState<string | null>(null);
+
 
   const [projectOptions, setProjectOptions] = useState<string[]>([]);
   const [serverOptions, setServerOptions] = useState<string[]>([]);
@@ -1064,155 +1102,105 @@ const App: React.FC = () => {
 
   const currentTheme = useMemo(() => themeMode === 'light' ? lightTheme : darkTheme, [themeMode]);
 
+  // Use hardcoded options directly for uniqueServerNames and uniqueProjectNames
   const uniqueServerNames = useMemo(() => {
-    if (projectFilter) {
-      return serverOptions.filter(server =>
-        server.includes(projectFilter)
-      ).sort();
-    }
-    return serverOptions.sort();
-  }, [projectFilter, serverOptions]);
+    return hardcodedServerNames.sort();
+  }, []);
 
   const uniqueProjectNames = useMemo(() => {
-    return projectOptions.sort();
-  }, [projectOptions]);
+    return hardcodedProjectNames.sort();
+  }, []);
 
-  // Effect to fetch initial endpoint data and filter options
+  // Effect to set initial endpoint data and filter options without API calls
   useEffect(() => {
-    const fetchInitialData = async () => {
+    const initializeDashboardData = () => {
       setLoading(true);
       setInitialFetchError(null);
-      try {
-        // Attempt to fetch from Google Books API to simulate a "health check" for initial dashboard status
-        const testQuery = 'React'; // A common query to test the API
-        const testResponse = await axios.get(`${GOOGLE_BOOKS_API_URL}?q=${encodeURIComponent(testQuery)}&maxResults=1`);
-        const apiIsHealthy = testResponse.status === 200 && testResponse.data.items && testResponse.data.items.length > 0;
 
-        const now = new Date();
-        const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-        const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+      const now = new Date();
+      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+      const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
 
-        // Simulate endpoints based on API health
-        const simulatedEndpoints: Endpoint[] = [
-          {
-            id: 'sim-ep-1', name: 'Books Search API', url: GOOGLE_BOOKS_API_URL, baselineLatency: 200,
-            internalLatency: apiIsHealthy ? 150 : 500, externalLatency: apiIsHealthy ? 180 : 600,
-            internalHealth: apiIsHealthy ? 'Green' : 'Red', externalHealth: apiIsHealthy ? 'Green' : 'Red',
-            lastChecked: now.toISOString(),
-            internalLatencyHistory: [
-              { value: apiIsHealthy ? 140 : 450, timestamp: twoHoursAgo },
-              { value: apiIsHealthy ? 160 : 550, timestamp: oneHourAgo },
-              { value: apiIsHealthy ? 150 : 500, timestamp: now }
-            ],
-            externalLatencyHistory: [
-              { value: apiIsHealthy ? 170 : 580, timestamp: twoHoursAgo },
-              { value: apiIsHealthy ? 190 : 620, timestamp: oneHourAgo },
-              { value: apiIsHealthy ? 180 : 600, timestamp: now }
-            ],
-            errorRate: apiIsHealthy ? 1 : 25, traffic: apiIsHealthy ? 1000 : 0,
-            errorRateHistory: [
-              { value: apiIsHealthy ? 0 : 20, timestamp: twoHoursAgo },
-              { value: apiIsHealthy ? 2 : 30, timestamp: oneHourAgo },
-              { value: apiIsHealthy ? 1 : 25, timestamp: now }
-            ],
-            serverName: 'Google API Server', projectName: 'Google Books'
-          },
-          {
-            id: 'sim-ep-2', name: 'Another Simulated API', url: '/api/another', baselineLatency: 100,
-            internalLatency: 90, externalLatency: 110, internalHealth: 'Green', externalHealth: 'Green',
-            lastChecked: now.toISOString(),
-            internalLatencyHistory: [
-              { value: 85, timestamp: twoHoursAgo },
-              { value: 95, timestamp: oneHourAgo },
-              { value: 90, timestamp: now }
-            ],
-            externalLatencyHistory: [
-              { value: 100, timestamp: twoHoursAgo },
-              { value: 115, timestamp: oneHourAgo },
-              { value: 110, timestamp: now }
-            ],
-            errorRate: 0, traffic: 500,
-            errorRateHistory: [
-              { value: 0, timestamp: twoHoursAgo },
-              { value: 0, timestamp: oneHourAgo },
-              { value: 0, timestamp: now }
-            ],
-            serverName: 'Internal Server', projectName: 'Internal Services'
-          }
-        ];
-        setEndpoints(simulatedEndpoints);
+      // Simulate endpoints with hardcoded data (no external API calls here)
+      const simulatedEndpoints: Endpoint[] = [
+        {
+          id: 'sim-ep-1', name: 'DTOCRUAT API', url: 'https://example.com/dtocruat', baselineLatency: 200,
+          internalLatency: 150, externalLatency: 180,
+          internalHealth: 'Green', externalHealth: 'Green',
+          lastChecked: now.toISOString(),
+          internalLatencyHistory: [
+            { value: 140, timestamp: twoHoursAgo },
+            { value: 160, timestamp: oneHourAgo },
+            { value: 150, timestamp: now }
+          ],
+          externalLatencyHistory: [
+            { value: 170, timestamp: twoHoursAgo },
+            { value: 190, timestamp: oneHourAgo },
+            { value: 180, timestamp: now }
+          ],
+          errorRate: 1, traffic: 1000,
+          errorRateHistory: [
+            { value: 0, timestamp: twoHoursAgo },
+            { value: 2, timestamp: oneHourAgo },
+            { value: 1, timestamp: now }
+          ],
+          serverName: '1', projectName: 'DTOCRUAT'
+        },
+        {
+          id: 'sim-ep-2', name: 'DTOCRDEV API', url: 'https://example.com/dtocrdev', baselineLatency: 100,
+          internalLatency: 90, externalLatency: 110, internalHealth: 'Green', externalHealth: 'Green',
+          lastChecked: now.toISOString(),
+          internalLatencyHistory: [
+            { value: 85, timestamp: twoHoursAgo },
+            { value: 95, timestamp: oneHourAgo },
+            { value: 90, timestamp: now }
+          ],
+          externalLatencyHistory: [
+            { value: 100, timestamp: twoHoursAgo },
+            { value: 115, timestamp: oneHourAgo },
+            { value: 110, timestamp: now }
+          ],
+          errorRate: 0, traffic: 500,
+          errorRateHistory: [
+            { value: 0, timestamp: twoHoursAgo },
+            { value: 0, timestamp: oneHourAgo },
+            { value: 0, timestamp: now }
+          ],
+          serverName: '2', projectName: 'DTOCRDEV'
+        },
+        {
+          id: 'sim-ep-3', name: 'DTOCRSSDEV API', url: 'https://example.com/dtocrssdev', baselineLatency: 120,
+          internalLatency: 110, externalLatency: 130, internalHealth: 'Yellow', externalHealth: 'Yellow',
+          lastChecked: now.toISOString(),
+          internalLatencyHistory: [
+            { value: 100, timestamp: twoHoursAgo },
+            { value: 120, timestamp: oneHourAgo },
+            { value: 110, timestamp: now }
+          ],
+          externalLatencyHistory: [
+            { value: 120, timestamp: twoHoursAgo },
+            { value: 140, timestamp: oneHourAgo },
+            { value: 130, timestamp: now }
+          ],
+          errorRate: 5, traffic: 700,
+          errorRateHistory: [
+            { value: 3, timestamp: twoHoursAgo },
+            { value: 6, timestamp: oneHourAgo },
+            { value: 5, timestamp: now }
+          ],
+          serverName: '3', projectName: 'DTOCRSSDEV'
+        }
+      ];
+      setEndpoints(simulatedEndpoints);
 
-        // Populate filter options based on the initial dummy data
-        const projects = Array.from(new Set(simulatedEndpoints.map(ep => ep.projectName)));
-        const servers = Array.from(new Set(simulatedEndpoints.map(ep => ep.serverName)));
-        setProjectOptions(projects);
-        setServerOptions(servers);
+      // Set hardcoded filter options
+      setProjectOptions(hardcodedProjectNames);
+      setServerOptions(hardcodedServerNames);
 
-      } catch (error) {
-        console.error("Failed to fetch initial data (simulating error):", error);
-        setInitialFetchError(`Failed to connect to Google Books API: ${(error as Error).message}. Displaying simulated critical status.`);
-
-        const now = new Date();
-        const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-        const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
-
-        // Simulate critical endpoints if API fetch fails
-        const simulatedCriticalEndpoints: Endpoint[] = [
-          {
-            id: 'sim-ep-1', name: 'Books Search API', url: GOOGLE_BOOKS_API_URL, baselineLatency: 200,
-            internalLatency: 999, externalLatency: 999,
-            internalHealth: 'Red', externalHealth: 'Red',
-            lastChecked: now.toISOString(),
-            internalLatencyHistory: [
-              { value: 800, timestamp: twoHoursAgo },
-              { value: 900, timestamp: oneHourAgo },
-              { value: 999, timestamp: now }
-            ],
-            externalLatencyHistory: [
-              { value: 850, timestamp: twoHoursAgo },
-              { value: 950, timestamp: oneHourAgo },
-              { value: 999, timestamp: now }
-            ],
-            errorRate: 100, traffic: 0,
-            errorRateHistory: [
-              { value: 50, timestamp: twoHoursAgo },
-              { value: 75, timestamp: oneHourAgo },
-              { value: 100, timestamp: now }
-            ],
-            serverName: 'Google API Server', projectName: 'Google Books'
-          },
-          {
-            id: 'sim-ep-2', name: 'Another Simulated API', url: '/api/another', baselineLatency: 100,
-            internalLatency: 150, externalLatency: 180, internalHealth: 'Yellow', externalHealth: 'Yellow',
-            lastChecked: now.toISOString(),
-            internalLatencyHistory: [
-              { value: 120, timestamp: twoHoursAgo },
-              { value: 140, timestamp: oneHourAgo },
-              { value: 150, timestamp: now }
-            ],
-            externalLatencyHistory: [
-              { value: 150, timestamp: twoHoursAgo },
-              { value: 170, timestamp: oneHourAgo },
-              { value: 180, timestamp: now }
-            ],
-            errorRate: 10, traffic: 200,
-            errorRateHistory: [
-              { value: 5, timestamp: twoHoursAgo },
-              { value: 8, timestamp: oneHourAgo },
-              { value: 10, timestamp: now }
-            ],
-            serverName: 'Internal Server', projectName: 'Internal Services'
-          }
-        ];
-        setEndpoints(simulatedCriticalEndpoints);
-        setProjectOptions(initialFilterOptions.projectNames);
-        setServerOptions(initialFilterOptions.serverNames);
-      } finally {
-        setLoading(false);
-      }
+      setLoading(false);
     };
 
-    fetchInitialData();
+    initializeDashboardData();
 
   }, []);
 
@@ -1266,43 +1254,25 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleApplyFilter = () => {
+  const handleApplyFilter = async () => { // Made async to await data fetch
+    console.log('Apply button clicked. Current filters:', { startDateString, endDateString, selectedTimeRange, projectFilter, serverNameFilter });
     const now = new Date();
     let newAppliedStartDate: Date | null = null;
     let newAppliedEndDate: Date | null = null;
+    let timespanToSend: string | null = null;
 
     if (selectedTimeRange) {
-      newAppliedEndDate = now;
-      switch (selectedTimeRange) {
-        case '1min':
-          newAppliedStartDate = new Date(now.getTime() - 1 * 60 * 1000);
-          break;
-        case '3min':
-          newAppliedStartDate = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-          break;
-        case '5min':
-          newAppliedStartDate = new Date(now.getTime() - 5 * 60 * 1000);
-          break;
-        case '1hour':
-          newAppliedStartDate = new Date(now.getTime() - 60 * 60 * 1000);
-          break;
-        case '3hours':
-          newAppliedStartDate = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-          break;
-        case '1day':
-          newAppliedStartDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-          break;
-        case '1week':
-          newAppliedStartDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          break;
-        case '1month':
-          newAppliedStartDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          break;
-        default:
-          break;
-      }
-      setStartDateString('');
-      setEndDateString('');
+      timespanToSend = selectedTimeRange === '1min' ? '1 Minute' :
+                       selectedTimeRange === '3min' ? '3 Minutes' :
+                       selectedTimeRange === '5min' ? '5 Minutes' :
+                       selectedTimeRange === '1hour' ? '1 Hour' :
+                       selectedTimeRange === '3hours' ? '3 Hours' :
+                       selectedTimeRange === '1day' ? '24 Hours' :
+                       selectedTimeRange === '1week' ? '7 Days' :
+                       selectedTimeRange === '1month' ? '30 Days' : null;
+      // If a time range is selected, fromDate and toDate should be null in the payload
+      newAppliedStartDate = null;
+      newAppliedEndDate = null;
     } else {
       if (startDateString) {
         newAppliedStartDate = new Date(startDateString);
@@ -1312,10 +1282,67 @@ const App: React.FC = () => {
         newAppliedEndDate = new Date(endDateString);
         newAppliedEndDate.setHours(23, 59, 59, 999);
       }
+      // If specific dates are selected, timespan should be null in the payload
+      timespanToSend = null;
     }
+
+    // Default to "24 Hours" if no specific dates or time range are set
+    if (!timespanToSend && !newAppliedStartDate && !newAppliedEndDate) {
+      timespanToSend = "24 Hours";
+    }
+
 
     setAppliedStartDate(newAppliedStartDate);
     setAppliedEndDate(newAppliedEndDate);
+
+    // --- Start: Moved data fetching logic here ---
+    setFilteredDataLoading(true);
+    setFilteredDataError(null);
+    setFilteredBookRecords([]); // Clear previous data immediately on apply click
+
+    try {
+      const data = await fetchFilteredDataFromAPI({
+        project: projectFilter,
+        server: serverNameFilter, // This is not sent to the new API, but kept for UI state
+        startDate: newAppliedStartDate,
+        endDate: newAppliedEndDate,
+        timespan: timespanToSend, // Pass the derived timespan
+      });
+
+      // Apply client-side date filtering if specific dates were chosen (and API doesn't filter)
+      const filteredByDate = data.filter(book => {
+        // If timespan was used, or no dates were specified, skip client-side date filter
+        if (timespanToSend || (!newAppliedStartDate && !newAppliedEndDate)) return true;
+
+        let bookPublishedDate: Date;
+        if (book.publishedDate.length === 4) {
+          bookPublishedDate = new Date(parseInt(book.publishedDate), 0, 1);
+        } else if (book.publishedDate.length === 7 && book.publishedDate.includes('-')) {
+          bookPublishedDate = new Date(book.publishedDate + '-01');
+        } else {
+          bookPublishedDate = new Date(book.publishedDate);
+        }
+
+        if (isNaN(bookPublishedDate.getTime())) {
+          console.warn(`Could not parse publishedDate: ${book.publishedDate} for book: ${book.title}. Skipping date filter for this book.`);
+          return true;
+        }
+
+        const startOfDayAppliedStartDate = new Date(newAppliedStartDate!);
+        startOfDayAppliedStartDate.setHours(0, 0, 0, 0);
+        const endOfDayAppliedEndDate = new Date(newAppliedEndDate!);
+        endOfDayAppliedEndDate.setHours(23, 59, 59, 999);
+
+        return bookPublishedDate >= startOfDayAppliedStartDate && bookPublishedDate <= endOfDayAppliedEndDate;
+      });
+
+      setFilteredBookRecords(filteredByDate);
+    } catch (error) {
+      setFilteredDataError(`Failed to fetch data: ${(error as Error).message}`);
+    } finally {
+      setFilteredDataLoading(false);
+    }
+    // --- End: Moved data fetching logic here ---
   };
 
   const handleClearFilters = () => {
@@ -1324,8 +1351,11 @@ const App: React.FC = () => {
     setAppliedStartDate(null);
     setAppliedEndDate(null);
     setServerNameFilter('');
-    setProjectFilter('');
+    setProjectFilter(''); // Clear project filter
     setSelectedTimeRange('');
+    setFilteredBookRecords([]); // Clear displayed data
+    setFilteredDataError(null);
+    setFilteredDataLoading(false);
   };
 
   const filteredEndpointsByProject = useMemo(() => {
@@ -1440,7 +1470,7 @@ const App: React.FC = () => {
                   sx={{ borderRadius: 2 }}
                 >
                   <MenuItem value="">
-                    <em>All Projects</em>
+                    <em>Select Project</em>
                   </MenuItem>
                   {uniqueProjectNames.map(name => (
                     <MenuItem key={name} value={name}>{name}</MenuItem>
@@ -1460,7 +1490,7 @@ const App: React.FC = () => {
                   sx={{ borderRadius: 2 }}
                 >
                   <MenuItem value="">
-                    <em>All Servers</em>
+                    <em>Select Server</em>
                   </MenuItem>
                   {uniqueServerNames.map(name => (
                     <MenuItem key={name} value={name}>{name}</MenuItem>
@@ -1566,6 +1596,9 @@ const App: React.FC = () => {
 
           {activeView === 'filtered_data' && (
             <FilteredDataDisplay
+              bookRecords={filteredBookRecords}
+              loading={filteredDataLoading}
+              error={filteredDataError}
               projectFilter={projectFilter}
               serverNameFilter={serverNameFilter}
               appliedStartDate={appliedStartDate}
