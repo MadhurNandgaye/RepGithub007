@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import axios from 'axios';
 import {
   Container,
   Typography,
@@ -32,12 +33,12 @@ import {
   FormControl,
   InputLabel,
   IconButton,
-  Dialog, // Added for confirmation dialog
-  DialogTitle, // Added for confirmation dialog
-  DialogContent, // Added for confirmation dialog
-  DialogActions, // Added for confirmation dialog
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   Grid,
-  InputAdornment, // Added InputAdornment
+  InputAdornment,
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -56,6 +57,7 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import PersonIcon from '@mui/icons-material/Person';
 import { Brightness4 as Brightness4Icon, Brightness7 as Brightness7Icon } from '@mui/icons-material';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import FilterListIcon from '@mui/icons-material/FilterList';
 
 
 import {
@@ -67,6 +69,89 @@ import {
   YAxis,
 } from 'recharts';
 import { blueGrey } from '@mui/material/colors';
+
+
+/**
+ * Interface for the filters that can be applied to the data fetch.
+ */
+interface DataFilters {
+  project?: string;
+  server?: string;
+  startDate?: Date | null;
+  endDate?: Date | null;
+}
+
+/**
+ * Interface for the structure of the data records.
+ * This will now represent a simplified book item from Google Books API.
+ */
+interface BookResult {
+  id: string;
+  title: string;
+  authors: string;
+  publishedDate: string;
+  description: string;
+  thumbnail: string;
+}
+
+/**
+ * Interface for the structure of an Endpoint.
+ * This will be simulated based on the success of the Google Books API call.
+ */
+interface Endpoint {
+  id: string;
+  name: string;
+  url: string;
+  baselineLatency: number;
+  internalLatency: number | null;
+  externalLatency: number | null;
+  internalHealth: 'Red' | 'Yellow' | 'Green' | 'Unknown';
+  externalHealth: 'Red' | 'Yellow' | 'Green' | 'Unknown';
+  lastChecked: string | null;
+  internalLatencyHistory: { value: number; timestamp: Date }[];
+  externalLatencyHistory: { value: number; timestamp: Date }[];
+  errorRate: number;
+  traffic: number;
+  errorRateHistory: { value: number; timestamp: Date }[];
+  serverName: string;
+  projectName: string;
+}
+
+// Google Books API base URL
+const GOOGLE_BOOKS_API_URL = 'https://www.googleapis.com/books/v1/volumes';
+
+/**
+ * Fetches data from the Google Books API.
+ * The 'project' filter will be used as the search query.
+ *
+ * @param {DataFilters} filters - An object containing filters for the data.
+ * @returns {Promise<BookResult[]>} A promise that resolves with an array of BookResult objects.
+ */
+const fetchFilteredDataFromAPI = async (filters: DataFilters): Promise<BookResult[]> => {
+  const query = filters.project || 'programming'; // Default search query
+  const maxResults = 10;
+  const apiUrl = `${GOOGLE_BOOKS_API_URL}?q=${encodeURIComponent(query)}&maxResults=${maxResults}`;
+
+  try {
+    const response = await axios.get(apiUrl);
+    console.log(`Google Books API call to ${apiUrl} successful. Response:`, response.data);
+
+    if (response.data && response.data.items) {
+      return response.data.items.map((item: any) => ({
+        id: item.id,
+        title: item.volumeInfo.title || 'N/A',
+        authors: item.volumeInfo.authors ? item.volumeInfo.authors.join(', ') : 'N/A',
+        publishedDate: item.volumeInfo.publishedDate || 'N/A',
+        description: item.volumeInfo.description ? item.volumeInfo.description.substring(0, 100) + '...' : 'N/A',
+        thumbnail: item.volumeInfo.imageLinks?.thumbnail || 'https://placehold.co/60x80/EEEEEE/AAAAAA?text=No+Image',
+      }));
+    }
+    return [];
+  } catch (error) {
+    console.error(`Error fetching data from Google Books API:`, error);
+    return [];
+  }
+};
 
 
 const lightTheme = createTheme({
@@ -240,153 +325,20 @@ const darkTheme = createTheme({
   },
 });
 
-interface HistoryDataPoint {
-  value: number;
-  timestamp: Date;
-}
-
-interface Endpoint {
-  id: string;
-  name: string;
-  url: string;
-  baselineLatency: number;
-  internalLatency: number | null;
-  externalLatency: number | null;
-  internalHealth: 'Red' | 'Yellow' | 'Green' | 'Unknown';
-  externalHealth: 'Red' | 'Yellow' | 'Green' | 'Unknown';
-  lastChecked: Date | null;
-  internalLatencyHistory: HistoryDataPoint[];
-  externalLatencyHistory: HistoryDataPoint[];
-  errorRate: number;
-  traffic: number;
-  errorRateHistory: HistoryDataPoint[];
-  serverName: string;
-  projectName: string;
-}
-
-const MAX_HISTORY_POINTS = 60;
-const HISTORY_SPAN_DAYS = 7;
-
-const generateDummyHistory = (
-  length: number,
-  baseValue: number,
-  amplitude: number,
-  frequency: number,
-  randomness: number,
-  referenceDate: Date
-): HistoryDataPoint[] => {
-  const history: HistoryDataPoint[] = [];
-  const historySpanMs = HISTORY_SPAN_DAYS * 24 * 60 * 60 * 1000;
-  const startTime = referenceDate.getTime() - historySpanMs;
-
-  for (let i = 0; i < length; i++) {
-    const value = Math.max(0, baseValue + Math.sin(i * frequency) * amplitude + Math.random() * randomness);
-    const timestamp = new Date(startTime + (i * (historySpanMs / length)));
-    history.push({ value: parseFloat(value.toFixed(1)), timestamp });
-  }
-  return history;
-};
-
-const generateInitialEndpoints = (): Endpoint[] => {
-  const endpoints: Endpoint[] = [];
-  const projectNames = ['Project Alpha', 'Project Beta', 'Project Gamma', 'Project Delta'];
-  const serversPerProject = 2;
-  const endpointsPerServer = 6;
-  const httpMethods = ['GET', 'POST', 'PUT', 'DELETE'];
-  const apiPaths = [
-    '/users/{id}', '/products/search', '/orders', '/auth/login', '/data/analytics',
-    '/swagger/swagger-ui.css', '/swagger/swagger-ui-bundle.js', '/api/v1/health',
-    '/payments/process', '/notifications/send', '/dtocr/legalparser',
-    '/authentication/getbeartoken', '/reports/daily', '/inventory/update',
-    '/customers/{id}/profile', '/billing/invoice', '/support/ticket',
-    '/metrics/cpu', '/logs/errors', '/admin/settings',
-    '/search/documents', '/files/upload', '/streams/live',
-    '/analytics/events', '/dashboard/summary', '/config/get',
-    '/status/check', '/users/register', '/products/add',
-    '/orders/track', '/auth/logout', '/data/export',
-    '/swagger/index.html', '/api/v2/status', '/payments/refund',
-    '/notifications/read', '/dtocr/legalvalidator', '/authentication/refresh',
-    '/reports/monthly', '/inventory/lookup', '/customers/new',
-    '/billing/statement', '/support/faq', '/metrics/memory',
-    '/logs/access', '/admin/users', '/search/articles',
-    '/files/download', '/streams/archive', '/analytics/users',
-    '/dashboard/details', '/config/set', '/status/ping'
+// Dummy data generation for initial filter options (for UI functionality)
+// This data is ONLY used to populate the dropdowns, not the tables.
+const generateInitialFilterOptions = (): { projectNames: string[]; serverNames: string[] } => {
+  const projectNames = ['Programming', 'History', 'Science', 'Fiction']; // Example categories for books
+  const serverNames = [ // Example servers, less relevant for Books API but kept for UI structure
+    'Server Alpha', 'Server Beta', 'Server Gamma',
   ];
-
-  let endpointIdCounter = 1;
-
-  for (const projectName of projectNames) {
-    for (let s = 1; s <= serversPerProject; s++) {
-      const serverName = `Server ${String.fromCharCode(64 + s)} for ${projectName}`;
-      for (let e = 1; e <= endpointsPerServer; e++) {
-        const baseline = Math.floor(Math.random() * (250 - 50 + 1)) + 50;
-        const randomMethod = httpMethods[Math.floor(Math.random() * httpMethods.length)];
-        const randomPath = apiPaths[Math.floor(Math.random() * apiPaths.length)];
-        
-        const endpointName = `${randomMethod} ${randomPath} (Endpoint ${e})`;
-
-        const now = new Date();
-        const randomDaysAgo = Math.floor(Math.random() * 60);
-        const initialLastChecked = new Date(now.getTime() - randomDaysAgo * 24 * 60 * 60 * 1000);
-        initialLastChecked.setHours(Math.floor(Math.random() * 24), Math.floor(Math.random() * 60), Math.floor(Math.random() * 60), 0);
-
-        endpoints.push({
-          id: String(endpointIdCounter++),
-          name: endpointName,
-          url: `https://api.example.com/${projectName.toLowerCase().replace(' ', '-')}/${serverName.toLowerCase().replace(' ', '-')}${randomPath}`,
-          baselineLatency: baseline,
-          internalLatency: null,
-          externalLatency: null,
-          internalHealth: 'Unknown',
-          externalHealth: 'Unknown',
-          lastChecked: initialLastChecked,
-          internalLatencyHistory: generateDummyHistory(MAX_HISTORY_POINTS, baseline, baseline * 0.2, 0.5, 10, initialLastChecked),
-          externalLatencyHistory: generateDummyHistory(MAX_HISTORY_POINTS, baseline * 1.2, baseline * 0.25, 0.5, 10, initialLastChecked),
-          errorRate: 0,
-          traffic: 0,
-          errorRateHistory: generateDummyHistory(MAX_HISTORY_POINTS, 5, 3, 0.3, 1, initialLastChecked),
-          serverName: serverName,
-          projectName: projectName,
-        });
-      }
-    }
-  }
-  return endpoints;
+  return { projectNames, serverNames };
 };
 
-const initialEndpoints: Endpoint[] = generateInitialEndpoints();
+const initialFilterOptions = generateInitialFilterOptions();
 
 
-const simulateApiCall = (baseline: number): { latency: number; health: 'Red' | 'Yellow' | 'Green'; errorRate: number; traffic: number } => {
-  const randomFactor = Math.random();
-  let latency: number;
-  let health: 'Red' | 'Yellow' | 'Green';
-  let errorRate: number;
-  let traffic: number;
-
-  if (randomFactor < 0.7) {
-    latency = baseline * (0.8 + Math.random() * 0.2);
-    health = 'Green';
-    errorRate = Math.round(Math.random() * 2);
-    traffic = Math.round(50 + Math.random() * 100);
-  } else if (randomFactor < 0.9) {
-    latency = baseline * (1.0 + Math.random() * 1.0);
-    health = 'Yellow';
-    errorRate = Math.round(3 + Math.random() * 7);
-    traffic = Math.round(100 + Math.random() * 200);
-  } else {
-    latency = baseline * (2.0 + Math.random() * 2.0);
-    health = 'Red';
-    errorRate = Math.round(10 + Math.random() * 20);
-    traffic = Math.round(20 + Math.random() * 50);
-  }
-
-  latency += Math.random() * 20;
-
-  return { latency: Math.round(latency), health, errorRate, traffic };
-};
-
-const getTrend = (history: HistoryDataPoint[]): 'improving' | 'degrading' | 'stable' | 'unknown' => {
+const getTrend = (history: { value: number; timestamp: Date }[]): 'improving' | 'degrading' | 'stable' | 'unknown' => {
   if (history.length < 2) {
     return 'unknown';
   }
@@ -496,8 +448,8 @@ const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatus
 
     return endpoints.filter(endpoint =>
       endpoint.lastChecked &&
-      endpoint.lastChecked.getTime() >= start.getTime() &&
-      endpoint.lastChecked.getTime() <= end.getTime()
+      new Date(endpoint.lastChecked).getTime() >= start.getTime() &&
+      new Date(endpoint.lastChecked).getTime() <= end.getTime()
     );
   }, [endpoints, appliedStartDate, appliedEndDate]);
 
@@ -515,7 +467,7 @@ const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatus
     return currentTheme.palette.success.main;
   };
 
-  const calculateAverage = (history: HistoryDataPoint[], startDate: Date | null, endDate: Date | null) => {
+  const calculateAverage = (history: { value: number; timestamp: Date }[], startDate: Date | null, endDate: Date | null) => {
     let filteredHistory = history;
     if (startDate && endDate) {
       filteredHistory = history.filter(point =>
@@ -546,7 +498,7 @@ const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatus
                 <TableCell align="right" sx={{ minWidth: '60px' }}>External Latency (ms)</TableCell>
                 <TableCell align="right" sx={{ minWidth: '80px' }}>Baseline (ms)</TableCell>
                 <TableCell align="right" sx={{ minWidth: '100px' }}>Current Errors</TableCell>
-                <TableCell align="right" sx={{ minWidth: '100px' }}>Avg Errors</TableCell>
+                {/* Removed Avg Errors column */}
                 <TableCell align="right" sx={{ minWidth: '80px' }}>Traffic (RPS)</TableCell>
                 <TableCell align="center" sx={{ minWidth: '100px' }}>Last Checked</TableCell>
               </TableRow></TableHead>
@@ -560,20 +512,23 @@ const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatus
                     <Box display="flex" alignItems="center" justifyContent="flex-end">
                       <Typography variant="body2" sx={{ mr: 1, minWidth: '20px', textAlign: 'right', fontSize: '0.75rem' }}>{endpoint.internalLatency !== null ? endpoint.internalLatency : 'N/A'}</Typography>
                       {endpoint.internalLatency !== null && (<LatencyBar currentLatency={endpoint.internalLatency} baselineLatency={endpoint.baselineLatency} health={endpoint.internalHealth} themeMode={themeMode} />)}
-                      {getTrendIcon(getTrend(endpoint.internalLatencyHistory))}
+                      {/* Ensure internalLatencyHistory is an array of HistoryDataPoint for getTrend */}
+                      {endpoint.internalLatencyHistory && getTrendIcon(getTrend(endpoint.internalLatencyHistory.map(h => ({ ...h, timestamp: h.timestamp instanceof Date ? h.timestamp : new Date(h.timestamp) })) ))}
                     </Box>
                   </TableCell>
                   <TableCell align="right">
                     <Box display="flex" alignItems="center" justifyContent="flex-end">
                       <Typography variant="body2" sx={{ mr: 1, minWidth: '20px', textAlign: 'right', fontSize: '0.75rem' }}>{endpoint.externalLatency !== null ? endpoint.externalLatency : 'N/A'}</Typography>
                       {endpoint.externalLatency !== null && (<LatencyBar currentLatency={endpoint.externalLatency} baselineLatency={endpoint.baselineLatency} health={endpoint.externalHealth} themeMode={themeMode} />)}
-                      {getTrendIcon(getTrend(endpoint.externalLatencyHistory))}
+                      {/* Ensure externalLatencyHistory is an array of HistoryDataPoint for getTrend */}
+                      {endpoint.externalLatencyHistory && getTrendIcon(getTrend(endpoint.externalLatencyHistory.map(h => ({ ...h, timestamp: h.timestamp instanceof Date ? h.timestamp : new Date(h.timestamp) })) ))}
                     </Box>
                   </TableCell>
                   <TableCell align="right">{endpoint.baselineLatency}</TableCell>
                   <TableCell align="right" sx={{ color: getErrorRateColor(endpoint.errorRate), fontWeight: 500 }}>{endpoint.errorRate}</TableCell>
+                  {/* Removed Avg Errors Cell */}
                   <TableCell align="right" sx={{ color: getTrafficColor(endpoint.traffic), fontWeight: 500 }}>{endpoint.traffic}</TableCell>
-                  <TableCell align="center">{endpoint.lastChecked ? endpoint.lastChecked.toLocaleString() : 'N/A'}</TableCell>
+                  <TableCell align="center">{endpoint.lastChecked ? new Date(endpoint.lastChecked).toLocaleString() : 'N/A'}</TableCell>
                 </TableRow>
               ))}</TableBody>
           </Table>
@@ -623,7 +578,7 @@ const AutomatedSelfHealingActions: React.FC = () => (
       </Alert>
       <Alert severity="warning" sx={{ mb: 1 }}>
         <AlertTitle>IIS App Pool Recycle</AlertTitle>
-        For web applications hosted on IIS, if an endpoint becomes unresponsive or shows degraded performance, the Logic App can initiate an automatic recycle of the relevant IIS application pool, often resolving minor resource contention issues.
+        For web applications hosted on IIS, if an endpoint becomes unresponsive or shows degraded performance, the Logic App can initiate an.automatic recycle of the relevant IIS application pool, often resolving minor resource contention issues.
       </Alert>
       <Alert severity="warning">
         <AlertTitle>Failover to Secondary Instance</AlertTitle>
@@ -685,7 +640,7 @@ interface SidebarNavProps {
   onSelectView: (view: string) => void;
   activeView: string;
   themeMode: 'dark' | 'light';
-  onLogoutRequest: () => void; // Changed prop name
+  onLogoutRequest: () => void;
 }
 
 const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, themeMode, onLogoutRequest }) => {
@@ -694,6 +649,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, theme
     { id: 'table', text: 'Endpoint Table', icon: <TableChartIcon /> },
     { id: 'error_trends', text: 'Error Trends', icon: <DeveloperBoardIcon /> },
     { id: 'summary', text: 'Overall Summary', icon: <DashboardIcon /> },
+    { id: 'filtered_data', text: 'Filtered Data', icon: <FilterListIcon /> }, // New nav item
     { id: 'notifications', text: 'Notifications', icon: <NotificationsIcon /> },
     { id: 'selfHealing', text: 'Self-Healing', icon: <AutoFixHighIcon /> },
     { id: 'user_profile', text: 'User Profile', icon: <PersonIcon /> },
@@ -746,7 +702,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, theme
         <Button
           variant="outlined"
           color="inherit"
-          onClick={onLogoutRequest} // Call the request function
+          onClick={onLogoutRequest}
           fullWidth
           sx={{ borderRadius: 2 }}
         >
@@ -758,7 +714,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, theme
 };
 
 interface MiniTrendGraphProps {
-  history: HistoryDataPoint[];
+  history: { value: number; timestamp: Date }[];
   label: string;
   unit: string;
   color: string;
@@ -851,7 +807,7 @@ const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ endpoints, appliedSta
                   Server: {endpoint.serverName}
                 </Typography>
                 <MiniTrendGraph
-                  history={endpoint.errorRateHistory}
+                  history={endpoint.errorRateHistory.map(h => ({ ...h, timestamp: h.timestamp instanceof Date ? h.timestamp : new Date(h.timestamp) }))} // Convert timestamp string to Date
                   label="Errors"
                   unit="errors"
                   color={currentTheme.palette.error.main}
@@ -988,10 +944,108 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, themeMode }) => {
   );
 };
 
+// New FilteredDataDisplay Component
+interface FilteredDataDisplayProps {
+  projectFilter: string;
+  serverNameFilter: string;
+  appliedStartDate: Date | null;
+  appliedEndDate: Date | null;
+}
+
+const FilteredDataDisplay: React.FC<FilteredDataDisplayProps> = ({ projectFilter, serverNameFilter, appliedStartDate, appliedEndDate }) => {
+  const [bookRecords, setBookRecords] = useState<BookResult[]>([]); // Changed to BookResult
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const getData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // Use fetchFilteredDataFromAPI to get book data
+        const data = await fetchFilteredDataFromAPI({
+          project: projectFilter,
+          server: serverNameFilter, // Not directly used by Google Books API, but kept for interface consistency
+          startDate: appliedStartDate,
+          endDate: appliedEndDate,
+        });
+        setBookRecords(data);
+      } catch (err) {
+        setError(`Failed to fetch data: ${(err as Error).message}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getData();
+  }, [projectFilter, serverNameFilter, appliedStartDate, appliedEndDate]);
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Loading filtered data...</Typography>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert severity="error">
+        <AlertTitle>Error</AlertTitle>
+        {error}
+      </Alert>
+    );
+  }
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h5" gutterBottom>
+          Google Books API Results for "{projectFilter || 'programming'}"
+        </Typography>
+        {bookRecords.length === 0 ? (
+          <Typography variant="body1" color="textSecondary">
+            No book records found matching the selected filters or query.
+          </Typography>
+        ) : (
+          <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+            <Table stickyHeader aria-label="filtered data table">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Thumbnail</TableCell>
+                  <TableCell>Title</TableCell>
+                  <TableCell>Authors</TableCell>
+                  <TableCell>Published Date</TableCell>
+                  <TableCell>Description</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {bookRecords.map((record) => (
+                  <TableRow key={record.id}>
+                    <TableCell>
+                      <img src={record.thumbnail} alt={record.title} style={{ width: 60, height: 80, borderRadius: 4 }} onError={(e) => { e.currentTarget.src = 'https://placehold.co/60x80/EEEEEE/AAAAAA?text=No+Image'; }} />
+                    </TableCell>
+                    <TableCell>{record.title}</TableCell>
+                    <TableCell>{record.authors}</TableCell>
+                    <TableCell>{record.publishedDate}</TableCell>
+                    <TableCell>{record.description}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
 
 const App: React.FC = () => {
-  const [endpoints, setEndpoints] = useState<Endpoint[]>(initialEndpoints);
+  const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [initialFetchError, setInitialFetchError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<string>('table');
   const [startDateString, setStartDateString] = useState<string>('');
   const [endDateString, setEndDateString] = useState<string>('');
@@ -1002,47 +1056,164 @@ const App: React.FC = () => {
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
   const [selectedTimeRange, setSelectedTimeRange] = useState<string>('');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false); // New state for logout confirmation
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false);
+
+  const [projectOptions, setProjectOptions] = useState<string[]>([]);
+  const [serverOptions, setServerOptions] = useState<string[]>([]);
+
 
   const currentTheme = useMemo(() => themeMode === 'light' ? lightTheme : darkTheme, [themeMode]);
 
   const uniqueServerNames = useMemo(() => {
     if (projectFilter) {
-      const names = new Set(initialEndpoints.filter(e => e.projectName === projectFilter).map(e => e.serverName));
-      return Array.from(names).sort();
+      return serverOptions.filter(server =>
+        server.includes(projectFilter)
+      ).sort();
     }
-    const names = new Set(initialEndpoints.map(e => e.serverName));
-    return Array.from(names).sort();
-  }, [initialEndpoints, projectFilter]);
+    return serverOptions.sort();
+  }, [projectFilter, serverOptions]);
 
   const uniqueProjectNames = useMemo(() => {
-    const names = new Set(initialEndpoints.map(e => e.projectName));
-    return Array.from(names).sort();
-  }, []);
+    return projectOptions.sort();
+  }, [projectOptions]);
 
+  // Effect to fetch initial endpoint data and filter options
   useEffect(() => {
-    setLoading(false);
+    const fetchInitialData = async () => {
+      setLoading(true);
+      setInitialFetchError(null);
+      try {
+        // Attempt to fetch from Google Books API to simulate a "health check" for initial dashboard status
+        const testQuery = 'React'; // A common query to test the API
+        const testResponse = await axios.get(`${GOOGLE_BOOKS_API_URL}?q=${encodeURIComponent(testQuery)}&maxResults=1`);
+        const apiIsHealthy = testResponse.status === 200 && testResponse.data.items && testResponse.data.items.length > 0;
 
-    const interval = setInterval(() => {
-      setEndpoints((prevEndpoints) =>
-        prevEndpoints.map((endpoint) => {
-          const internalResult = simulateApiCall(endpoint.baselineLatency);
-          const externalResult = simulateApiCall(endpoint.baselineLatency * 1.2);
+        const now = new Date();
+        const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+        const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
 
-          return {
-            ...endpoint,
-            internalLatency: internalResult.latency,
-            externalLatency: externalResult.latency,
-            internalHealth: internalResult.health,
-            externalHealth: externalResult.health,
-            errorRate: internalResult.errorRate,
-            traffic: internalResult.traffic,
-          };
-        })
-      );
-    }, 3000);
+        // Simulate endpoints based on API health
+        const simulatedEndpoints: Endpoint[] = [
+          {
+            id: 'sim-ep-1', name: 'Books Search API', url: GOOGLE_BOOKS_API_URL, baselineLatency: 200,
+            internalLatency: apiIsHealthy ? 150 : 500, externalLatency: apiIsHealthy ? 180 : 600,
+            internalHealth: apiIsHealthy ? 'Green' : 'Red', externalHealth: apiIsHealthy ? 'Green' : 'Red',
+            lastChecked: now.toISOString(),
+            internalLatencyHistory: [
+              { value: apiIsHealthy ? 140 : 450, timestamp: twoHoursAgo },
+              { value: apiIsHealthy ? 160 : 550, timestamp: oneHourAgo },
+              { value: apiIsHealthy ? 150 : 500, timestamp: now }
+            ],
+            externalLatencyHistory: [
+              { value: apiIsHealthy ? 170 : 580, timestamp: twoHoursAgo },
+              { value: apiIsHealthy ? 190 : 620, timestamp: oneHourAgo },
+              { value: apiIsHealthy ? 180 : 600, timestamp: now }
+            ],
+            errorRate: apiIsHealthy ? 1 : 25, traffic: apiIsHealthy ? 1000 : 0,
+            errorRateHistory: [
+              { value: apiIsHealthy ? 0 : 20, timestamp: twoHoursAgo },
+              { value: apiIsHealthy ? 2 : 30, timestamp: oneHourAgo },
+              { value: apiIsHealthy ? 1 : 25, timestamp: now }
+            ],
+            serverName: 'Google API Server', projectName: 'Google Books'
+          },
+          {
+            id: 'sim-ep-2', name: 'Another Simulated API', url: '/api/another', baselineLatency: 100,
+            internalLatency: 90, externalLatency: 110, internalHealth: 'Green', externalHealth: 'Green',
+            lastChecked: now.toISOString(),
+            internalLatencyHistory: [
+              { value: 85, timestamp: twoHoursAgo },
+              { value: 95, timestamp: oneHourAgo },
+              { value: 90, timestamp: now }
+            ],
+            externalLatencyHistory: [
+              { value: 100, timestamp: twoHoursAgo },
+              { value: 115, timestamp: oneHourAgo },
+              { value: 110, timestamp: now }
+            ],
+            errorRate: 0, traffic: 500,
+            errorRateHistory: [
+              { value: 0, timestamp: twoHoursAgo },
+              { value: 0, timestamp: oneHourAgo },
+              { value: 0, timestamp: now }
+            ],
+            serverName: 'Internal Server', projectName: 'Internal Services'
+          }
+        ];
+        setEndpoints(simulatedEndpoints);
 
-    return () => clearInterval(interval);
+        // Populate filter options based on the initial dummy data
+        const projects = Array.from(new Set(simulatedEndpoints.map(ep => ep.projectName)));
+        const servers = Array.from(new Set(simulatedEndpoints.map(ep => ep.serverName)));
+        setProjectOptions(projects);
+        setServerOptions(servers);
+
+      } catch (error) {
+        console.error("Failed to fetch initial data (simulating error):", error);
+        setInitialFetchError(`Failed to connect to Google Books API: ${(error as Error).message}. Displaying simulated critical status.`);
+
+        const now = new Date();
+        const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+        const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+
+        // Simulate critical endpoints if API fetch fails
+        const simulatedCriticalEndpoints: Endpoint[] = [
+          {
+            id: 'sim-ep-1', name: 'Books Search API', url: GOOGLE_BOOKS_API_URL, baselineLatency: 200,
+            internalLatency: 999, externalLatency: 999,
+            internalHealth: 'Red', externalHealth: 'Red',
+            lastChecked: now.toISOString(),
+            internalLatencyHistory: [
+              { value: 800, timestamp: twoHoursAgo },
+              { value: 900, timestamp: oneHourAgo },
+              { value: 999, timestamp: now }
+            ],
+            externalLatencyHistory: [
+              { value: 850, timestamp: twoHoursAgo },
+              { value: 950, timestamp: oneHourAgo },
+              { value: 999, timestamp: now }
+            ],
+            errorRate: 100, traffic: 0,
+            errorRateHistory: [
+              { value: 50, timestamp: twoHoursAgo },
+              { value: 75, timestamp: oneHourAgo },
+              { value: 100, timestamp: now }
+            ],
+            serverName: 'Google API Server', projectName: 'Google Books'
+          },
+          {
+            id: 'sim-ep-2', name: 'Another Simulated API', url: '/api/another', baselineLatency: 100,
+            internalLatency: 150, externalLatency: 180, internalHealth: 'Yellow', externalHealth: 'Yellow',
+            lastChecked: now.toISOString(),
+            internalLatencyHistory: [
+              { value: 120, timestamp: twoHoursAgo },
+              { value: 140, timestamp: oneHourAgo },
+              { value: 150, timestamp: now }
+            ],
+            externalLatencyHistory: [
+              { value: 150, timestamp: twoHoursAgo },
+              { value: 170, timestamp: oneHourAgo },
+              { value: 180, timestamp: now }
+            ],
+            errorRate: 10, traffic: 200,
+            errorRateHistory: [
+              { value: 5, timestamp: twoHoursAgo },
+              { value: 8, timestamp: oneHourAgo },
+              { value: 10, timestamp: now }
+            ],
+            serverName: 'Internal Server', projectName: 'Internal Services'
+          }
+        ];
+        setEndpoints(simulatedCriticalEndpoints);
+        setProjectOptions(initialFilterOptions.projectNames);
+        setServerOptions(initialFilterOptions.serverNames);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInitialData();
+
   }, []);
 
 
@@ -1177,8 +1348,8 @@ const App: React.FC = () => {
     if (appliedStartDate && appliedEndDate) {
       currentEndpoints = currentEndpoints.filter(endpoint =>
         endpoint.lastChecked &&
-        endpoint.lastChecked.getTime() >= appliedStartDate.getTime() &&
-        endpoint.lastChecked.getTime() <= appliedEndDate.getTime()
+        new Date(endpoint.lastChecked).getTime() >= appliedStartDate.getTime() &&
+        new Date(endpoint.lastChecked).getTime() <= appliedEndDate.getTime()
       );
     }
     return currentEndpoints;
@@ -1193,18 +1364,18 @@ const App: React.FC = () => {
     setIsLoggedIn(true);
   };
 
-  const handleLogoutRequest = () => { // Function to open the confirmation dialog
+  const handleLogoutRequest = () => {
     setShowLogoutConfirm(true);
   };
 
-  const handleConfirmLogout = () => { // Function to handle actual logout
+  const handleConfirmLogout = () => {
     setIsLoggedIn(false);
     setActiveView('table');
     handleClearFilters();
-    setShowLogoutConfirm(false); // Close dialog after logout
+    setShowLogoutConfirm(false);
   };
 
-  const handleCancelLogout = () => { // Function to cancel logout
+  const handleCancelLogout = () => {
     setShowLogoutConfirm(false);
   };
 
@@ -1244,8 +1415,15 @@ const App: React.FC = () => {
             </IconButton>
           </Box>
 
+          {initialFetchError && (
+            <Alert severity="error" sx={{ mb: 4, width: '100%' }}>
+              <AlertTitle>API Connection Error</AlertTitle>
+              {initialFetchError}
+            </Alert>
+          )}
+
           {/* Conditional rendering of filter options */}
-          {(activeView === 'table' || activeView === 'summary' || activeView === 'error_trends') && (
+          {(activeView === 'table' || activeView === 'summary' || activeView === 'error_trends' || activeView === 'filtered_data') && (
             <Box sx={{ display: 'flex', gap: 1, mb: 4, alignItems: 'center', flexWrap: 'wrap' }}>
               {/* Project Dropdown */}
               <FormControl sx={{ minWidth: 120 }}>
@@ -1322,7 +1500,7 @@ const App: React.FC = () => {
                 value={startDateString}
                 onChange={(e) => { setStartDateString(e.target.value); setSelectedTimeRange(''); }}
                 InputLabelProps={{ shrink: true }}
-                inputProps={{ id: 'startDateInput' }} // Added ID for programmatic focus
+                inputProps={{ id: 'startDateInput' }}
               />
               {/* End Date */}
               <TextField
@@ -1331,7 +1509,7 @@ const App: React.FC = () => {
                 value={endDateString}
                 onChange={(e) => { setEndDateString(e.target.value); setSelectedTimeRange(''); }}
                 InputLabelProps={{ shrink: true }}
-                inputProps={{ id: 'endDateInput' }} // Added ID for programmatic focus
+                inputProps={{ id: 'endDateInput' }}
               />
               <Button
                 variant="contained"
@@ -1383,6 +1561,15 @@ const App: React.FC = () => {
               appliedStartDate={appliedStartDate}
               appliedEndDate={appliedEndDate}
               themeMode={themeMode}
+            />
+          )}
+
+          {activeView === 'filtered_data' && (
+            <FilteredDataDisplay
+              projectFilter={projectFilter}
+              serverNameFilter={serverNameFilter}
+              appliedStartDate={appliedStartDate}
+              appliedEndDate={appliedEndDate}
             />
           )}
 
