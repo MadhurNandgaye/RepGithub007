@@ -57,7 +57,7 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import PersonIcon from '@mui/icons-material/Person';
 import { Brightness4 as Brightness4Icon, Brightness7 as Brightness7Icon } from '@mui/icons-material';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import FilterListIcon from '@mui/icons-material/FilterList';
+// No longer importing FilterListIcon as the "Filtered Data" view has been removed
 
 
 import {
@@ -76,23 +76,24 @@ import { blueGrey } from '@mui/material/colors';
  */
 interface DataFilters {
   project?: string;
-  server?: string; // This will not be sent to the new API, but kept for UI state
   startDate?: Date | null;
   endDate?: Date | null;
   timespan?: string | null; // New field for the API
 }
 
 /**
- * Interface for the structure of the data records.
- * This will now represent a simplified book item for demonstration.
+ * Interface for the structure of data records fetched from the Monitor API.
+ * This interface has been updated based on the provided backend response sample.
  */
-interface BookResult {
-  id: string;
-  title: string;
-  authors: string;
-  publishedDate: string;
-  description: string;
-  thumbnail: string;
+interface MonitorDataResult {
+  projectName: string; // Maps to "name" from your response (e.g., "POST /DTOCRWS/v1/Status")
+  server: string; // Maps to "cloud_RoleInstance"
+  totalCount: number;
+  successCount: number;
+  failureCount: number;
+  latency: string; // Maps to "avgDurationMs", keeping as string as per sample
+  status: string; // Added new status field
+  // Add any other properties your backend API returns if not already here
 }
 
 /**
@@ -137,31 +138,29 @@ const formatDateToDDMMYYYY = (date: Date): string => {
  * Fetches data from the new Monitor API using a GET request with query parameters.
  *
  * @param {DataFilters} filters - An object containing filters for the data.
- * @returns {Promise<BookResult[]>} A promise that resolves with an array of BookResult objects.
+ * @returns {Promise<MonitorDataResult[]>} A promise that resolves with an array of MonitorDataResult objects.
  */
-const fetchFilteredDataFromAPI = async (filters: DataFilters): Promise<BookResult[]> => {
+const fetchFilteredDataFromAPI = async (filters: DataFilters): Promise<MonitorDataResult[]> => {
   const projectName = filters.project || '';
-  const timespan = filters.timespan || null;
+  const timespan = filters.timespan || null; // This is the mapped timespan string (e.g., '24 Hours', '2 Days')
 
   if (!projectName) {
-    console.log('fetchFilteredDataFromAPI: No project filter provided, skipping API call.');
+    console.log('fetchFilteredDataFromAPI: No project filter provided, returning empty data.');
     return [];
   }
 
   const params = new URLSearchParams();
   params.append('ProjectName', projectName);
 
-  // Add FromDate and ToDate only if timespan is not provided
-  if (!timespan) {
-    if (filters.startDate) {
-      params.append('FromDate', formatDateToDDMMYYYY(filters.startDate));
-    }
-    if (filters.endDate) {
-      params.append('ToDate', formatDateToDDMMYYYY(filters.endDate));
-    }
+  // Always append FromDate and ToDate if they exist in filters
+  if (filters.startDate) {
+    params.append('FromDate', formatDateToDDMMYYYY(filters.startDate));
+  }
+  if (filters.endDate) {
+    params.append('ToDate', formatDateToDDMMYYYY(filters.endDate));
   }
 
-  // Add Timespan if provided
+  // Always append Timespan if it exists in filters
   if (timespan) {
     params.append('Timespan', timespan);
   }
@@ -172,52 +171,42 @@ const fetchFilteredDataFromAPI = async (filters: DataFilters): Promise<BookResul
   console.log('fetchFilteredDataFromAPI: Query parameters being sent:', Object.fromEntries(params.entries())); // Log the parameters object
 
   try {
-    // NOTE: This API call will likely fail in the browser due to CORS and localhost.
-    // This is for demonstration of the request structure.
     const response = await axios.get(apiUrlWithQuery);
+    console.log(`fetchFilteredDataFromAPI: Actual API call to ${apiUrlWithQuery} successful. Response:`, response.data);
 
-    console.log(`fetchFilteredDataFromAPI: API call to ${apiUrlWithQuery} successful. Response:`, response.data);
-
-    // --- IMPORTANT: Adjust this section based on your actual API response structure ---
-    // The following is a placeholder mapping from a hypothetical response structure
-    // to the BookResult interface. You will need to replace this with logic
-    // that correctly parses data from your 'GetDataFromAppInsights' API.
-    if (response.data && Array.isArray(response.data)) {
-      // Assuming your API returns an array of objects that can be mapped to BookResult
-      return response.data.map((item: any, index: number) => ({
-        id: item.id || `mock-id-${index}`,
-        title: item.name || `Mock Title for ${projectName}`,
-        authors: item.user || 'Unknown User',
-        publishedDate: item.timestamp ? new Date(item.timestamp).toISOString().split('T')[0] : 'N/A',
-        description: item.message || 'No description available from mock data.',
-        thumbnail: 'https://placehold.co/60x80/EEEEEE/AAAAAA?text=Data', // Placeholder image
+    // --- IMPORTANT: Directly returning mapped API response for display in the table ---
+    if (Array.isArray(response.data)) {
+      return response.data.map((item: any) => ({
+        projectName: item.name || 'N/A', // Mapping 'name' from API to 'projectName'
+        server: item.cloud_RoleInstance || 'N/A', // Mapping 'cloud_RoleInstance' to 'server'
+        totalCount: item.totalCount !== undefined ? Number(item.totalCount) : 0,
+        successCount: item.successCount !== undefined ? Number(item.successCount) : 0,
+        failureCount: item.failureCount !== undefined ? Number(item.failureCount) : 0,
+        latency: item.avgDurationMs !== undefined ? String(item.avgDurationMs) : 'N/A', // Mapping 'avgDurationMs' to 'latency'
+        status: item.status || 'Unknown', // Mapping 'status' from API to 'status'
       }));
-    } else if (response.data && typeof response.data === 'object') {
-        // If your API returns a single object that might contain a list, adjust here.
-        // For now, let's just return a single mock item if the response is a non-array object
+    } else if (response.data && typeof response.data === 'object' && Object.keys(response.data).length > 0) {
+        // If your API returns a single object (not an array of objects)
+        const item = response.data;
         return [{
-            id: 'mock-single-id',
-            title: `Single Mock Result for ${projectName}`,
-            authors: 'API Response',
-            publishedDate: new Date().toISOString().split('T')[0],
-            description: 'This is a single mock result from the API.',
-            thumbnail: 'https://placehold.co/60x80/EEEEEE/AAAAAA?text=Single',
+            projectName: item.name || 'N/A',
+            server: item.cloud_RoleInstance || 'N/A',
+            totalCount: item.totalCount !== undefined ? Number(item.totalCount) : 0,
+            successCount: item.successCount !== undefined ? Number(item.successCount) : 0,
+            failureCount: item.failureCount !== undefined ? Number(item.failureCount) : 0,
+            latency: item.avgDurationMs !== undefined ? String(item.avgDurationMs) : 'N/A',
+            status: item.status || 'Unknown',
         }];
     }
     // --- End of IMPORTANT section ---
 
+    console.warn('fetchFilteredDataFromAPI: API response was not an array or a single object. Returning empty array.');
     return []; // Return empty array if no data or unexpected structure
+
   } catch (error) {
     console.error(`fetchFilteredDataFromAPI: Error fetching data from ${MONITOR_API_URL}:`, error);
-    // Return a simulated error response for the UI to display something
-    return [{
-        id: 'error-mock',
-        title: 'Error Fetching Data',
-        authors: 'System',
-        publishedDate: new Date().toISOString().split('T')[0],
-        description: `Failed to load data for ${projectName}. Check console for details.`,
-        thumbnail: 'https://placehold.co/60x80/FF0000/FFFFFF?text=Error',
-    }];
+    // Return an empty array or an error object if you want to display an error in the table
+    return [];
   }
 };
 
@@ -395,12 +384,11 @@ const darkTheme = createTheme({
 
 // Hardcoded filter options as per user request
 const hardcodedProjectNames = ['DTOCRUAT', 'DTOCRDEV', 'DTOCRSSDEV'];
-const hardcodedServerNames = ['1', '2', '3'];
+// Removed hardcodedServerNames as the server filter is being removed
 
-const generateInitialFilterOptions = (): { projectNames: string[]; serverNames: string[] } => {
+const generateInitialFilterOptions = (): { projectNames: string[] } => { // Updated return type
   return {
     projectNames: hardcodedProjectNames,
-    serverNames: hardcodedServerNames,
   };
 };
 
@@ -507,103 +495,86 @@ const OverallSummaryStatus: React.FC<{ totalEndpoints: number; healthyEndpoints:
   </Card>
 );
 
-const IndividualEndpointStatusTable: React.FC<{ endpoints: Endpoint[]; getStatusProps: Function; getTrendIcon: Function; appliedStartDate: Date | null; appliedEndDate: Date | null; themeMode: 'light' | 'dark' }> = ({ endpoints, getStatusProps, getTrendIcon, appliedStartDate, appliedEndDate, themeMode }) => {
-  const filteredEndpoints = useMemo(() => {
-    if (!appliedStartDate || !appliedEndDate) {
-      return endpoints;
+// Renamed IndividualEndpointStatusTable to ApiMonitorDataTable
+interface ApiMonitorDataTableProps {
+  monitorRecords: MonitorDataResult[];
+  themeMode: 'light' | 'dark';
+}
+
+const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecords, themeMode }) => {
+  // Removed health, trend, and latency bar related props and logic
+  // as they are not part of MonitorDataResult and not requested for this table.
+
+  // Function to determine border color based on latency
+  const getLatencyBorderColor = (latency: string): string => {
+    const latencyMs = parseFloat(latency);
+    if (isNaN(latencyMs)) {
+      return 'transparent'; // Or a default color for invalid latency
     }
-    const start = appliedStartDate;
-    const end = appliedEndDate;
-
-    return endpoints.filter(endpoint =>
-      endpoint.lastChecked &&
-      new Date(endpoint.lastChecked).getTime() >= start.getTime() &&
-      new Date(endpoint.lastChecked).getTime() <= end.getTime()
-    );
-  }, [endpoints, appliedStartDate, appliedEndDate]);
-
-  const getErrorRateColor = (errorCount: number) => {
-    const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
-    if (errorCount > 10) return currentTheme.palette.error.main;
-    if (errorCount > 3) return currentTheme.palette.warning.main;
-    return currentTheme.palette.success.main;
-  };
-
-  const getTrafficColor = (traffic: number) => {
-    const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
-    if (traffic > 200) return currentTheme.palette.primary.main;
-    if (traffic < 50) return currentTheme.palette.warning.main;
-    return currentTheme.palette.success.main;
-  };
-
-  const calculateAverage = (history: { value: number; timestamp: Date }[], startDate: Date | null, endDate: Date | null) => {
-    let filteredHistory = history;
-    if (startDate && endDate) {
-      filteredHistory = history.filter(point =>
-        point.timestamp.getTime() >= startDate.getTime() &&
-        point.timestamp.getTime() <= endDate.getTime()
-      );
+    if (latencyMs < 100) {
+      return 'green'; // Good latency
+    } else if (latencyMs >= 100 && latencyMs <= 200) {
+      return 'orange'; // Warning latency
+    } else {
+      return 'red'; // Critical latency
     }
-
-    if (filteredHistory.length === 0) return 'N/A';
-    const sum = filteredHistory.reduce((acc, val) => acc + val.value, 0);
-    return (sum / filteredHistory.length).toFixed(1);
   };
 
   return (
     <Card>
       <CardContent>
         <Typography variant="h5" gutterBottom>
-          Individual Endpoint Health Status
+          API Monitoring Data
         </Typography>
         <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-          <Table stickyHeader aria-label="endpoint health table">
+          <Table stickyHeader aria-label="api monitor data table">
+            {/* Adjusted TableHead formatting to prevent whitespace issues */}
             <TableHead><TableRow>
-                <TableCell sx={{ minWidth: '25px' }}>No.</TableCell>
-                <TableCell sx={{ minWidth: '150px' }}>Endpoint Name</TableCell>
-                <TableCell align="center" sx={{ minWidth: '50px' }}>Internal Health</TableCell>
-                <TableCell align="center" sx={{ minWidth: '50px' }}>External Health</TableCell>
-                <TableCell align="right" sx={{ minWidth: '30px' }}>Internal Latency (ms)</TableCell>
-                <TableCell align="right" sx={{ minWidth: '60px' }}>External Latency (ms)</TableCell>
-                <TableCell align="right" sx={{ minWidth: '80px' }}>Baseline (ms)</TableCell>
-                <TableCell align="right" sx={{ minWidth: '100px' }}>Current Errors</TableCell>
-                <TableCell align="right" sx={{ minWidth: '80px' }}>Traffic (RPS)</TableCell>
-                <TableCell align="center" sx={{ minWidth: '100px' }}>Last Checked</TableCell>
+                <TableCell>Project Name</TableCell> {/* Updated column header */}
+                <TableCell>Server</TableCell> {/* Updated column header */}
+                <TableCell align="right">Total Count</TableCell>
+                <TableCell align="right">Success Count</TableCell>
+                <TableCell align="right">Failure Count</TableCell>
+                <TableCell align="right">Latency</TableCell> {/* Renamed column header */}
+                <TableCell>Status</TableCell> {/* Added new Status column */}
               </TableRow></TableHead>
-            <TableBody>{filteredEndpoints.map((endpoint, index) => (
-                <TableRow key={endpoint.id}>
-                  <TableCell>{index + 1}</TableCell>
-                  <TableCell component="th" scope="row">{endpoint.name}</TableCell>
-                  <TableCell align="center"><Chip {...getStatusProps(endpoint.internalHealth)} size="small" sx={{ width: 50, fontSize: '0.65rem' }} /></TableCell>
-                  <TableCell align="center"><Chip {...getStatusProps(endpoint.externalHealth)} size="small" sx={{ width: 50, fontSize: '0.65rem' }} /></TableCell>
-                  <TableCell align="right">
-                    <Box display="flex" alignItems="center" justifyContent="flex-end">
-                      <Typography variant="body2" sx={{ mr: 1, minWidth: '20px', textAlign: 'right', fontSize: '0.75rem' }}>{endpoint.internalLatency !== null ? endpoint.internalLatency : 'N/A'}</Typography>
-                      {endpoint.internalLatency !== null && (<LatencyBar currentLatency={endpoint.internalLatency} baselineLatency={endpoint.baselineLatency} health={endpoint.internalHealth} themeMode={themeMode} />)}
-                      {/* Ensure internalLatencyHistory is an array of HistoryDataPoint for getTrend */}
-                      {endpoint.internalLatencyHistory && getTrendIcon(getTrend(endpoint.internalLatencyHistory.map(h => ({ ...h, timestamp: h.timestamp instanceof Date ? h.timestamp : new Date(h.timestamp) })) ))}
-                    </Box>
+            <TableBody>
+              {monitorRecords.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center"> {/* Updated colspan */}
+                    No API records found for the selected filters.
                   </TableCell>
-                  <TableCell align="right">
-                    <Box display="flex" alignItems="center" justifyContent="flex-end">
-                      <Typography variant="body2" sx={{ mr: 1, minWidth: '20px', textAlign: 'right', fontSize: '0.75rem' }}>{endpoint.externalLatency !== null ? endpoint.externalLatency : 'N/A'}</Typography>
-                      {endpoint.externalLatency !== null && (<LatencyBar currentLatency={endpoint.externalLatency} baselineLatency={endpoint.baselineLatency} health={endpoint.externalHealth} themeMode={themeMode} />)}
-                      {/* Ensure externalLatencyHistory is an array of HistoryDataPoint for getTrend */}
-                      {endpoint.externalLatencyHistory && getTrendIcon(getTrend(endpoint.externalLatencyHistory.map(h => ({ ...h, timestamp: h.timestamp instanceof Date ? h.timestamp : new Date(h.timestamp) })) ))}
-                    </Box>
-                  </TableCell>
-                  <TableCell align="right">{endpoint.baselineLatency}</TableCell>
-                  <TableCell align="right" sx={{ color: getErrorRateColor(endpoint.errorRate), fontWeight: 500 }}>{endpoint.errorRate}</TableCell>
-                  <TableCell align="right" sx={{ color: getTrafficColor(endpoint.traffic), fontWeight: 500 }}>{endpoint.traffic}</TableCell>
-                  <TableCell align="center">{endpoint.lastChecked ? new Date(endpoint.lastChecked).toLocaleString() : 'N/A'}</TableCell>
                 </TableRow>
-              ))}</TableBody>
+              ) : (
+                monitorRecords.map((record, index) => (
+                  <TableRow key={record.projectName + record.server + index}> {/* Updated key */}
+                    <TableCell>{record.projectName}</TableCell> {/* Updated data field */}
+                    <TableCell>{record.server}</TableCell> {/* Updated data field */}
+                    <TableCell align="right">{record.totalCount}</TableCell>
+                    <TableCell align="right">{record.successCount}</TableCell>
+                    <TableCell align="right">{record.failureCount}</TableCell>
+                    <TableCell
+                      align="right"
+                      sx={{
+                        border: `2px solid ${getLatencyBorderColor(record.latency)}`, // Apply border based on latency
+                        borderRadius: '8px', // Ensure rounded corners are maintained
+                        p: 1, // Add some padding to make border visible
+                      }}
+                    >
+                      {record.latency}
+                    </TableCell> {/* Updated data field */}
+                    <TableCell>{record.status}</TableCell> {/* Display status */}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
           </Table>
         </TableContainer>
       </CardContent>
     </Card>
   );
 };
+
 
 const NotificationAlerting: React.FC = () => (
   <Card>
@@ -678,29 +649,50 @@ const loggedInUser: User = {
   contact: '+1-555-123-4567',
 };
 
-const UserProfileTable: React.FC = () => {
-  return (
-    <Card>
-      <CardContent>
-        <Typography variant="h5" gutterBottom>
-          My Profile
-        </Typography>
-        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-          <Table aria-label="user profile table">
-            <TableBody><TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold', width: '30%' }}>User ID</TableCell><TableCell>{loggedInUser.id}</TableCell></TableRow>
-              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Name</TableCell><TableCell>{loggedInUser.name}</TableCell></TableRow>
-              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Email</TableCell><TableCell>{loggedInUser.email}</TableCell></TableRow>
-              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Role</TableCell><TableCell>{loggedInUser.role}</TableCell></TableRow>
-              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Department</TableCell><TableCell>{loggedInUser.department}</TableCell></TableRow>
-              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Contact</TableCell><TableCell>{loggedInUser.contact}</TableCell></TableRow>
-              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Last Login</TableCell><TableCell>{loggedInUser.lastLogin.toLocaleString()}</TableCell></TableRow>
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </CardContent>
-    </Card>
-  );
-};
+const UserProfileTable: React.FC = () => (
+  <Card>
+    <CardContent>
+      <Typography variant="h5" gutterBottom>
+        My Profile
+      </Typography>
+      <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+        <Table aria-label="user profile table">
+          <TableBody>
+            {/* Corrected formatting to avoid whitespace text nodes */}
+            <TableRow>
+              <TableCell component="th" scope="row" sx={{ fontWeight: 'bold', width: '30%' }}>User ID</TableCell>
+              <TableCell>{loggedInUser.id}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Name</TableCell>
+              <TableCell>{loggedInUser.name}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Email</TableCell>
+              <TableCell>{loggedInUser.email}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Role</TableCell>
+              <TableCell>{loggedInUser.role}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Department</TableCell>
+              <TableCell>{loggedInUser.department}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Contact</TableCell>
+              <TableCell>{loggedInUser.contact}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Last Login</TableCell>
+              <TableCell>{loggedInUser.lastLogin.toLocaleString()}</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </CardContent>
+  </Card>
+);
 
 
 interface SidebarNavProps {
@@ -716,7 +708,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, theme
     { id: 'table', text: 'Endpoint Table', icon: <TableChartIcon /> },
     { id: 'error_trends', text: 'Error Trends', icon: <DeveloperBoardIcon /> },
     { id: 'summary', text: 'Overall Summary', icon: <DashboardIcon /> },
-    { id: 'filtered_data', text: 'Filtered Data', icon: <FilterListIcon /> }, // New nav item
+    // Removed 'filtered_data' nav item
     { id: 'notifications', text: 'Notifications', icon: <NotificationsIcon /> },
     { id: 'selfHealing', text: 'Self-Healing', icon: <AutoFixHighIcon /> },
     { id: 'user_profile', text: 'User Profile', icon: <PersonIcon /> },
@@ -849,13 +841,11 @@ const MiniTrendGraph: React.FC<MiniTrendGraphProps> = ({ history, label, unit, c
 };
 
 interface ErrorRateTrendsProps {
-  endpoints: Endpoint[];
-  appliedStartDate: Date | null;
-  appliedEndDate: Date | null;
+  monitorRecords: MonitorDataResult[]; // Changed to MonitorDataResult[]
   themeMode: 'light' | 'dark';
 }
 
-const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ endpoints, appliedStartDate, appliedEndDate, themeMode }) => {
+const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ monitorRecords, themeMode }) => {
   const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
   return (
     <Card>
@@ -864,30 +854,28 @@ const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ endpoints, appliedSta
           Error Count Trends Over Time
         </Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 3 }}>
-          {endpoints.map(endpoint => (
-            <Card key={endpoint.id} variant="outlined" sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ mb: 1 }}>
-                  {endpoint.name}
-                </Typography>
-                <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                  Server: {endpoint.serverName}
-                </Typography>
-                <MiniTrendGraph
-                  history={endpoint.errorRateHistory.map(h => ({ ...h, timestamp: h.timestamp instanceof Date ? h.timestamp : new Date(h.timestamp) }))} // Convert timestamp string to Date
-                  label="Errors"
-                  unit="errors"
-                  color={currentTheme.palette.error.main}
-                  appliedStartDate={appliedStartDate}
-                  appliedEndDate={appliedEndDate}
-                  themeMode={themeMode}
-                />
-                <Typography variant="body2" component="span" sx={{ mt: 1 }}>
-                  Current Errors: <Chip label={`${endpoint.errorRate} errors`} size="small" color={endpoint.errorRate > 10 ? 'error' : endpoint.errorRate > 3 ? 'warning' : 'success'} />
-                </Typography>
-              </CardContent>
-            </Card>
-          ))}
+          {monitorRecords.length === 0 ? (
+            <Typography variant="body2" color="textSecondary" sx={{ p: 2 }}>
+              No error data available for the selected filters.
+            </Typography>
+          ) : (
+            monitorRecords.map((record, index) => (
+              <Card key={record.projectName + record.server + index} variant="outlined" sx={{ borderRadius: 2 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ mb: 1 }}>
+                    {record.projectName}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                    Server: {record.server}
+                  </Typography>
+                  {/* MiniTrendGraph removed as MonitorDataResult does not contain historical data */}
+                  <Typography variant="body2" component="span" sx={{ mt: 1 }}>
+                    Current Errors: <Chip label={`${record.failureCount} errors`} size="small" color={record.failureCount > 10 ? 'error' : record.failureCount > 3 ? 'warning' : 'success'} />
+                  </Typography>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </Box>
       </CardContent>
     </Card>
@@ -1011,83 +999,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, themeMode }) => {
   );
 };
 
-// New FilteredDataDisplay Component
-interface FilteredDataDisplayProps {
-  bookRecords: BookResult[];
-  loading: boolean;
-  error: string | null;
-  projectFilter: string;
-  serverNameFilter: string; // Keep for display purposes
-  appliedStartDate: Date | null; // Keep for display purposes
-  appliedEndDate: Date | null; // Keep for display purposes
-}
-
-const FilteredDataDisplay: React.FC<FilteredDataDisplayProps> = ({ bookRecords, loading, error, projectFilter, serverNameFilter, appliedStartDate, appliedEndDate }) => {
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
-        <CircularProgress />
-        <Typography sx={{ ml: 2 }}>Loading filtered data...</Typography>
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert severity="error">
-        <AlertTitle>Error</AlertTitle>
-        {error}
-      </Alert>
-    );
-  }
-
-  return (
-    <Card>
-      <CardContent>
-        <Typography variant="h5" gutterBottom>
-          API Results for "{projectFilter || 'No Project Selected'}"
-        </Typography>
-        {bookRecords.length === 0 && projectFilter === '' ? (
-          <Typography variant="body1" color="textSecondary">
-            Please select a "Project" and click "Apply" to fetch data.
-          </Typography>
-        ) : bookRecords.length === 0 ? (
-          <Typography variant="body1" color="textSecondary">
-            No records found matching the selected filters.
-          </Typography>
-        ) : (
-          <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-            <Table stickyHeader aria-label="filtered data table">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Thumbnail</TableCell>
-                  <TableCell>Title</TableCell>
-                  <TableCell>Authors</TableCell>
-                  <TableCell>Published Date</TableCell>
-                  <TableCell>Description</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {bookRecords.map((record) => (
-                  <TableRow key={record.id}>
-                    <TableCell>
-                      <img src={record.thumbnail} alt={record.title} style={{ width: 60, height: 80, borderRadius: 4 }} onError={(e) => { e.currentTarget.src = 'https://placehold.co/60x80/EEEEEE/AAAAAA?text=No+Image'; }} />
-                    </TableCell>
-                    <TableCell>{record.title}</TableCell>
-                    <TableCell>{record.authors}</TableCell>
-                    <TableCell>{record.publishedDate}</TableCell>
-                    <TableCell>{record.description}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </CardContent>
-    </Card>
-  );
-};
+// Removed FilteredDataDisplay component entirely
 
 
 const App: React.FC = () => {
@@ -1099,30 +1011,26 @@ const App: React.FC = () => {
   const [endDateString, setEndDateString] = useState<string>('');
   const [appliedStartDate, setAppliedStartDate] = useState<Date | null>(null);
   const [appliedEndDate, setAppliedEndDate] = useState<Date | null>(null);
-  const [serverNameFilter, setServerNameFilter] = useState<string>('');
+  // Removed serverNameFilter state
   const [projectFilter, setProjectFilter] = useState<string>(''); // Initialized to empty string
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
   const [selectedTimeRange, setSelectedTimeRange] = useState<string>('');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false);
 
-  // State for FilteredDataDisplay's data
-  const [filteredBookRecords, setFilteredBookRecords] = useState<BookResult[]>([]);
-  const [filteredDataLoading, setFilteredDataLoading] = useState(false);
-  const [filteredDataError, setFilteredDataError] = useState<string | null>(null);
+  // State for ApiMonitorDataTable's data (formerly filteredMonitorRecords)
+  const [apiMonitorTableData, setApiMonitorTableData] = useState<MonitorDataResult[]>([]);
+  const [apiMonitorTableLoading, setApiMonitorTableLoading] = useState(false);
+  const [apiMonitorTableError, setApiMonitorTableError] = useState<string | null>(null);
 
 
   const [projectOptions, setProjectOptions] = useState<string[]>([]);
-  const [serverOptions, setServerOptions] = useState<string[]>([]);
+  // Removed serverOptions state
 
 
   const currentTheme = useMemo(() => themeMode === 'light' ? lightTheme : darkTheme, [themeMode]);
 
-  // Use hardcoded options directly for uniqueServerNames and uniqueProjectNames
-  const uniqueServerNames = useMemo(() => {
-    return hardcodedServerNames.sort();
-  }, []);
-
+  // Removed uniqueServerNames memo
   const uniqueProjectNames = useMemo(() => {
     return hardcodedProjectNames.sort();
   }, []);
@@ -1155,12 +1063,12 @@ const App: React.FC = () => {
             { value: 180, timestamp: now }
           ],
           errorRate: 1, traffic: 1000,
+          serverName: '1', projectName: 'DTOCRUAT', // Ensure projectName is here
           errorRateHistory: [
             { value: 0, timestamp: twoHoursAgo },
             { value: 2, timestamp: oneHourAgo },
             { value: 1, timestamp: now }
           ],
-          serverName: '1', projectName: 'DTOCRUAT'
         },
         {
           id: 'sim-ep-2', name: 'DTOCRDEV API', url: 'https://example.com/dtocrdev', baselineLatency: 100,
@@ -1177,12 +1085,12 @@ const App: React.FC = () => {
             { value: 110, timestamp: now }
           ],
           errorRate: 0, traffic: 500,
+          serverName: '2', projectName: 'DTOCRDEV', // Ensure projectName is here
           errorRateHistory: [
             { value: 0, timestamp: twoHoursAgo },
             { value: 0, timestamp: oneHourAgo },
             { value: 0, timestamp: now }
           ],
-          serverName: '2', projectName: 'DTOCRDEV'
         },
         {
           id: 'sim-ep-3', name: 'DTOCRSSDEV API', url: 'https://example.com/dtocrssdev', baselineLatency: 120,
@@ -1199,20 +1107,19 @@ const App: React.FC = () => {
             { value: 130, timestamp: now }
           ],
           errorRate: 5, traffic: 700,
+          serverName: '3', projectName: 'DTOCRSSDEV', // Ensure projectName is here
           errorRateHistory: [
             { value: 3, timestamp: twoHoursAgo },
             { value: 6, timestamp: oneHourAgo },
             { value: 5, timestamp: now }
           ],
-          serverName: '3', projectName: 'DTOCRSSDEV'
         }
       ];
       setEndpoints(simulatedEndpoints);
 
       // Set hardcoded filter options
       setProjectOptions(hardcodedProjectNames);
-      setServerOptions(hardcodedServerNames);
-
+      // Removed setServerOptions
       setLoading(false);
     };
 
@@ -1271,12 +1178,23 @@ const App: React.FC = () => {
   }, []);
 
   const handleApplyFilter = async () => { // Made async to await data fetch
-    console.log('Apply button clicked. Current filters:', { startDateString, endDateString, selectedTimeRange, projectFilter, serverNameFilter });
-    const now = new Date();
+    console.log('Apply button clicked. Current filters:', { startDateString, endDateString, selectedTimeRange, projectFilter }); // Removed serverNameFilter
     let newAppliedStartDate: Date | null = null;
     let newAppliedEndDate: Date | null = null;
     let timespanToSend: string | null = null;
 
+    // Process Start Date
+    if (startDateString) {
+      newAppliedStartDate = new Date(startDateString);
+      newAppliedStartDate.setHours(0, 0, 0, 0);
+    }
+    // Process End Date
+    if (endDateString) {
+      newAppliedEndDate = new Date(endDateString);
+      newAppliedEndDate.setHours(23, 59, 59, 999);
+    }
+
+    // Process Timespan from dropdown
     if (selectedTimeRange) {
       timespanToSend = selectedTimeRange === '1min' ? '1 Minute' :
                        selectedTimeRange === '3min' ? '3 Minutes' :
@@ -1286,23 +1204,10 @@ const App: React.FC = () => {
                        selectedTimeRange === '1day' ? '24 Hours' :
                        selectedTimeRange === '1week' ? '7 Days' :
                        selectedTimeRange === '1month' ? '30 Days' : null;
-      // If a time range is selected, fromDate and toDate should be null in the payload
-      newAppliedStartDate = null;
-      newAppliedEndDate = null;
-    } else {
-      if (startDateString) {
-        newAppliedStartDate = new Date(startDateString);
-        newAppliedStartDate.setHours(0, 0, 0, 0);
-      }
-      if (endDateString) {
-        newAppliedEndDate = new Date(endDateString);
-        newAppliedEndDate.setHours(23, 59, 59, 999);
-      }
-      // If specific dates are selected, timespan should be null in the payload
-      timespanToSend = null;
     }
 
-    // Default to "24 Hours" if no specific dates or time range are set AND no specific dates are picked
+    // If no specific dates and no time range are set, default to "24 Hours"
+    // This condition should only apply if *neither* date range *nor* time range is explicitly set by the user.
     if (!timespanToSend && !newAppliedStartDate && !newAppliedEndDate) {
       timespanToSend = "24 Hours";
     }
@@ -1312,51 +1217,25 @@ const App: React.FC = () => {
     setAppliedEndDate(newAppliedEndDate);
 
     // --- Start: Moved data fetching logic here ---
-    setFilteredDataLoading(true);
-    setFilteredDataError(null);
-    setFilteredBookRecords([]); // Clear previous data immediately on apply click
+    setApiMonitorTableLoading(true); // Use new loading state
+    setApiMonitorTableError(null); // Use new error state
+    setApiMonitorTableData([]); // Clear previous data immediately on apply click
 
     try {
       const data = await fetchFilteredDataFromAPI({
         project: projectFilter,
-        server: serverNameFilter, // This is not sent to the new API, but kept for UI state
+        // Removed server: serverNameFilter,
         startDate: newAppliedStartDate,
         endDate: newAppliedEndDate,
         timespan: timespanToSend, // Pass the derived timespan
       });
 
-      // Apply client-side date filtering if specific dates were chosen (and API doesn't filter)
-      const filteredByDate = data.filter(book => {
-        // If timespan was used, or no dates were specified, skip client-side date filter
-        if (timespanToSend || (!newAppliedStartDate && !newAppliedEndDate)) return true;
-
-        let bookPublishedDate: Date;
-        if (book.publishedDate.length === 4) {
-          bookPublishedDate = new Date(parseInt(book.publishedDate), 0, 1);
-        } else if (book.publishedDate.length === 7 && book.publishedDate.includes('-')) {
-          bookPublishedDate = new Date(book.publishedDate + '-01');
-        } else {
-          bookPublishedDate = new Date(book.publishedDate);
-        }
-
-        if (isNaN(bookPublishedDate.getTime())) {
-          console.warn(`Could not parse publishedDate: ${book.publishedDate} for book: ${book.title}. Skipping date filter for this book.`);
-          return true;
-        }
-
-        const startOfDayAppliedStartDate = new Date(newAppliedStartDate!);
-        startOfDayAppliedStartDate.setHours(0, 0, 0, 0);
-        const endOfDayAppliedEndDate = new Date(newAppliedEndDate!);
-        endOfDayAppliedEndDate.setHours(23, 59, 59, 999);
-
-        return bookPublishedDate >= startOfDayAppliedStartDate && bookPublishedDate <= endOfDayAppliedEndDate;
-      });
-
-      setFilteredBookRecords(filteredByDate);
+      // The table will now display the actual MonitorDataResult data from fetchFilteredDataFromAPI.
+      setApiMonitorTableData(data); // Use new data state
     } catch (error) {
-      setFilteredDataError(`Failed to fetch data: ${(error as Error).message}`);
+      setApiMonitorTableError(`Failed to fetch data: ${(error as Error).message}`); // Use new error state
     } finally {
-      setFilteredDataLoading(false);
+      setApiMonitorTableLoading(false); // Use new loading state
     }
     // --- End: Moved data fetching logic here ---
   };
@@ -1366,12 +1245,12 @@ const App: React.FC = () => {
     setEndDateString('');
     setAppliedStartDate(null);
     setAppliedEndDate(null);
-    setServerNameFilter('');
+    // Removed setServerNameFilter
     setProjectFilter(''); // Clear project filter
     setSelectedTimeRange('');
-    setFilteredBookRecords([]); // Clear displayed data
-    setFilteredDataError(null);
-    setFilteredDataLoading(false);
+    setApiMonitorTableData([]); // Clear displayed data
+    setApiMonitorTableError(null);
+    setApiMonitorTableLoading(false);
   };
 
   const filteredEndpointsByProject = useMemo(() => {
@@ -1381,15 +1260,9 @@ const App: React.FC = () => {
     return endpoints.filter(endpoint => endpoint.projectName === projectFilter);
   }, [endpoints, projectFilter]);
 
-  const filteredEndpointsByServer = useMemo(() => {
-    if (!serverNameFilter) {
-      return filteredEndpointsByProject;
-    }
-    return filteredEndpointsByProject.filter(endpoint => endpoint.serverName === serverNameFilter);
-  }, [filteredEndpointsByProject, serverNameFilter]);
-
+  // Removed filteredEndpointsByServer memo
   const displayEndpoints = useMemo(() => {
-    let currentEndpoints = filteredEndpointsByServer;
+    let currentEndpoints = filteredEndpointsByProject; // Now directly use filteredEndpointsByProject
 
     if (appliedStartDate && appliedEndDate) {
       currentEndpoints = currentEndpoints.filter(endpoint =>
@@ -1399,7 +1272,7 @@ const App: React.FC = () => {
       );
     }
     return currentEndpoints;
-  }, [filteredEndpointsByServer, appliedStartDate, appliedEndDate]);
+  }, [filteredEndpointsByProject, appliedStartDate, appliedEndDate]);
 
 
   const toggleTheme = () => {
@@ -1469,7 +1342,7 @@ const App: React.FC = () => {
           )}
 
           {/* Conditional rendering of filter options */}
-          {(activeView === 'table' || activeView === 'summary' || activeView === 'error_trends' || activeView === 'filtered_data') && (
+          {(activeView === 'table' || activeView === 'summary' || activeView === 'error_trends') && (
             <Box sx={{ display: 'flex', gap: 1, mb: 4, alignItems: 'center', flexWrap: 'wrap' }}>
               {/* Project Dropdown */}
               <FormControl sx={{ minWidth: 120 }}>
@@ -1481,7 +1354,7 @@ const App: React.FC = () => {
                   label="Project"
                   onChange={(e) => {
                     setProjectFilter(e.target.value as string);
-                    setServerNameFilter('');
+                    // Removed setServerNameFilter('');
                   }}
                   sx={{ borderRadius: 2 }}
                 >
@@ -1494,7 +1367,8 @@ const App: React.FC = () => {
                 </Select>
               </FormControl>
 
-              {/* Server Dropdown */}
+              {/* Removed Server Dropdown */}
+              {/*
               <FormControl sx={{ minWidth: 120 }}>
                 <InputLabel id="server-name-select-label">Server</InputLabel>
                 <Select
@@ -1513,6 +1387,7 @@ const App: React.FC = () => {
                   ))}
                 </Select>
               </FormControl>
+              */}
 
               {/* Time Range Dropdown */}
               <FormControl sx={{ minWidth: 130 }}>
@@ -1591,36 +1466,21 @@ const App: React.FC = () => {
           )}
 
           {activeView === 'table' && (
-            <IndividualEndpointStatusTable
-              endpoints={displayEndpoints}
-              getStatusProps={getStatusProps}
-              getTrendIcon={getTrendIcon}
-              appliedStartDate={appliedStartDate}
-              appliedEndDate={appliedEndDate}
+            // Changed to ApiMonitorDataTable and passing apiMonitorTableData
+            <ApiMonitorDataTable
+              monitorRecords={apiMonitorTableData}
               themeMode={themeMode}
             />
           )}
 
           {activeView === 'error_trends' && (
             <ErrorRateTrends
-              endpoints={displayEndpoints}
-              appliedStartDate={appliedStartDate}
-              appliedEndDate={appliedEndDate}
+              monitorRecords={apiMonitorTableData} // Pass MonitorDataResult to ErrorRateTrends
               themeMode={themeMode}
             />
           )}
 
-          {activeView === 'filtered_data' && (
-            <FilteredDataDisplay
-              bookRecords={filteredBookRecords}
-              loading={filteredDataLoading}
-              error={filteredDataError}
-              projectFilter={projectFilter}
-              serverNameFilter={serverNameFilter}
-              appliedStartDate={appliedStartDate}
-              appliedEndDate={appliedEndDate}
-            />
-          )}
+          {/* Removed FilteredDataDisplay component rendering */}
 
           {activeView === 'notifications' && <NotificationAlerting />}
           {activeView === 'selfHealing' && <AutomatedSelfHealingActions />}
