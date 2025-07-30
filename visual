@@ -539,9 +539,10 @@ function stableSort<T>(array: readonly T[], comparator: (a: T, b: T) => number) 
 interface ApiMonitorDataTableProps {
   monitorRecords: MonitorDataResult[];
   themeMode: 'light' | 'dark';
+  loading: boolean; // Added loading prop
 }
 
-const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecords, themeMode }) => {
+const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecords, themeMode, loading }) => {
   const [order, setOrder] = useState<Order>('asc');
   const [orderBy, setOrderBy] = useState<keyof MonitorDataResult>('projectName');
 
@@ -595,7 +596,26 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
         <Typography variant="h5" gutterBottom>
           API Monitoring Data
         </Typography>
-        <TableContainer component={Paper} sx={{ borderRadius: 2, maxHeight: 400, overflowY: 'auto' }}> {/* Added maxHeight and overflowY */}
+        <TableContainer component={Paper} sx={{ borderRadius: 2, maxHeight: 400, overflowY: 'auto', position: 'relative' }}> {/* Added position: 'relative' */}
+          {loading && ( // Conditional loading overlay
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: 'rgba(0, 0, 0, 0.5)', // Semi-transparent overlay
+                zIndex: 100, // Ensure it's on top
+                borderRadius: 2,
+              }}
+            >
+              <CircularProgress color="primary" />
+            </Box>
+          )}
           <Table stickyHeader aria-label="api monitor data table">
             {/* Adjusted TableHead formatting to prevent whitespace issues */}
             <TableHead>
@@ -666,7 +686,7 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
               </TableRow>
             </TableHead>
             <TableBody>
-              {sortedRecords.length === 0 ? (
+              {sortedRecords.length === 0 && !loading ? ( // Only show "No records" if not loading
                 <TableRow>
                   <TableCell colSpan={7} align="center">
                     No API records found for the selected filters.
@@ -1671,6 +1691,7 @@ const App: React.FC = () => {
             <ApiMonitorDataTable
               monitorRecords={apiMonitorTableData}
               themeMode={themeMode}
+              loading={apiMonitorTableLoading} // Pass loading state to the table
             />
           )}
 
