@@ -100,7 +100,7 @@ interface MonitorDataResult {
 
 /**
  * Interface for the structure of an Endpoint.
- * This will be simulated based on the success of the Google Books API call.
+ * This will be simulated based on the Google Books API call.
  */
 interface Endpoint {
   id: string;
@@ -1403,6 +1403,50 @@ const App: React.FC = () => {
     setApiMonitorTableLoading(false);
   };
 
+  const handleDownloadExcel = () => {
+    const headers = [
+      "Project Name",
+      "Server",
+      "Status",
+      "Total Count",
+      "Success Count",
+      "Failure Count",
+      "Latency"
+    ];
+
+    const csvContent = [
+      headers.join(','),
+      ...apiMonitorTableData.map(row =>
+        [
+          `"${row.projectName}"`, // Enclose in quotes to handle commas in names
+          `"${row.server}"`,
+          `"${row.status}"`,
+          row.totalCount,
+          row.successCount,
+          row.failureCount,
+          row.latency
+        ].join(',')
+      )
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) { // Feature detection for download attribute
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'api_monitoring_data.csv');
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } else {
+      // Fallback for browsers that don't support the download attribute
+      alert('Your browser does not support downloading files directly. Please copy the table data manually.');
+    }
+  };
+
+
   const filteredEndpointsByProject = useMemo(() => {
     if (!projectFilter) {
       return endpoints;
@@ -1595,6 +1639,13 @@ const App: React.FC = () => {
                 sx={{ height: '40px', px: 2, borderRadius: 2 }}
               >
                 Clear
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={handleDownloadExcel}
+                sx={{ height: '40px', px: 2, borderRadius: 2 }}
+              >
+                Download as Excel
               </Button>
             </Box>
           )}
