@@ -1512,6 +1512,12 @@ const App: React.FC = () => {
     setShowLogoutConfirm(false);
   };
 
+  // Determine if date fields should be disabled
+  const isDateFieldsDisabled = !!selectedTimeRange;
+  // Determine if time range dropdown should be disabled
+  const isTimeRangeDisabled = !!startDateString || !!endDateString;
+
+
   if (loading) {
     return (
       <ThemeProvider theme={currentTheme}>
@@ -1611,7 +1617,15 @@ const App: React.FC = () => {
                   id="time-range-select"
                   value={selectedTimeRange}
                   label="Time Range"
-                  onChange={(e) => { setSelectedTimeRange(e.target.value as string); }}
+                  onChange={(e) => {
+                    setSelectedTimeRange(e.target.value as string);
+                    // Clear date fields if time range is selected
+                    if (e.target.value) {
+                      setStartDateString('');
+                      setEndDateString('');
+                    }
+                  }}
+                  disabled={isTimeRangeDisabled} // Disable if date fields have values
                   sx={{ borderRadius: 2 }}
                 >
                   <MenuItem value="">
@@ -1633,18 +1647,32 @@ const App: React.FC = () => {
                 label="From Date"
                 type="datetime-local" // Changed type to datetime-local
                 value={startDateString}
-                onChange={(e) => { setStartDateString(e.target.value); setSelectedTimeRange(''); }}
+                onChange={(e) => {
+                  setStartDateString(e.target.value);
+                  // Clear time range if date field is used
+                  if (e.target.value) {
+                    setSelectedTimeRange('');
+                  }
+                }}
                 InputLabelProps={{ shrink: true }}
                 inputProps={{ id: 'startDateInput' }}
+                disabled={isDateFieldsDisabled} // Disable if time range is selected
               />
               {/* End Date */}
               <TextField
                 label="To Date"
                 type="datetime-local" // Changed type to datetime-local
                 value={endDateString}
-                onChange={(e) => { setEndDateString(e.target.value); setSelectedTimeRange(''); }}
+                onChange={(e) => {
+                  setEndDateString(e.target.value);
+                  // Clear time range if date field is used
+                  if (e.target.value) {
+                    setSelectedTimeRange('');
+                  }
+                }}
                 InputLabelProps={{ shrink: true }}
                 inputProps={{ id: 'endDateInput' }}
+                disabled={isDateFieldsDisabled} // Disable if time range is selected
               />
               <Button
                 variant="contained"
