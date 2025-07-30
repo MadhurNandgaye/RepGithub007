@@ -88,6 +88,7 @@ interface DataFilters {
 interface MonitorDataResult {
   projectName: string; // Maps to "name" from your response (e.g., "POST /DTOCRWS/v1/Status")
   server: string; // Maps to "cloud_RoleInstance"
+  status: string;
   totalCount: number;
   successCount: number;
   failureCount: number;
@@ -177,25 +178,25 @@ const fetchFilteredDataFromAPI = async (filters: DataFilters): Promise<MonitorDa
     // --- IMPORTANT: Directly returning mapped API response for display in the table ---
     if (Array.isArray(response.data)) {
       return response.data.map((item: any) => ({
-        projectName: item.name || 'N/A', // Mapping 'name' from API to 'projectName'
-        server: item.cloud_RoleInstance || 'N/A', // Mapping 'cloud_RoleInstance' to 'server'
+        projectName: item.projectName || 'N/A', // Mapping 'name' from API to 'projectName'
+        server: item.server || 'N/A', // Mapping 'cloud_RoleInstance' to 'server'
         totalCount: item.totalCount !== undefined ? Number(item.totalCount) : 0,
         successCount: item.successCount !== undefined ? Number(item.successCount) : 0,
         failureCount: item.failureCount !== undefined ? Number(item.failureCount) : 0,
-        latency: item.avgDurationMs !== undefined ? String(item.avgDurationMs) : 'N/A', // Mapping 'avgDurationMs' to 'latency'
-        // Removed status: item.status || 'Unknown', // Mapping 'status' from API to 'status'
+        latency: item.latency !== undefined ? String(item.latency) : 'N/A', // Mapping 'avgDurationMs' to 'latency'
+        status: item.status || 'Unknown', // Mapping 'status' from API to 'status'
       }));
     } else if (response.data && typeof response.data === 'object' && Object.keys(response.data).length > 0) {
         // If your API returns a single object (not an array of objects)
         const item = response.data;
         return [{
-            projectName: item.name || 'N/A',
-            server: item.cloud_RoleInstance || 'N/A',
+            projectName: item.projectName || 'N/A',
+            server: item.server || 'N/A',
             totalCount: item.totalCount !== undefined ? Number(item.totalCount) : 0,
             successCount: item.successCount !== undefined ? Number(item.successCount) : 0,
             failureCount: item.failureCount !== undefined ? Number(item.failureCount) : 0,
-            latency: item.avgDurationMs !== undefined ? String(item.avgDurationMs) : 'N/A',
-            // Removed status: item.status || 'Unknown',
+            latency: item.latency !== undefined ? String(item.latency) : 'N/A',
+            status: item.status || 'Unknown',
         }];
     }
     // --- End of IMPORTANT section ---
@@ -369,11 +370,11 @@ const darkTheme = createTheme({
       styleOverrides: {
         root: {
           // Target the native calendar picker indicator for WebKit browsers
-          '& .MuiInputBase-input[type="date"]::-webkit-calendar-picker-indicator': {
+          '& .MuiInputBase-input[type="datetime-local"]::-webkit-calendar-picker-indicator': {
             filter: 'invert(1)', // Invert color for dark theme
           },
           // Ensure the input text color is white in dark theme
-          '& .MuiInputBase-input[type="date"]': {
+          '& .MuiInputBase-input[type="datetime-local"]': {
             color: '#ffffff',
           },
         },
@@ -520,6 +521,21 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
     }
   };
 
+  // Function to determine background color based on status
+  const getStatusBackgroundColor = (status: string): string => {
+    switch (status.toLowerCase()) {
+      case 'healthy':
+        return 'rgba(76, 175, 80, 0.2)'; // Green with transparency
+      case 'degraded':
+        return 'rgba(255, 152, 0, 0.2)'; // Orange with transparency
+      case 'critical':
+        return 'rgba(244, 67, 54, 0.2)'; // Red with transparency
+      default:
+        return 'rgba(158, 158, 158, 0.1)'; // Grey with transparency for unknown
+    }
+  };
+
+
   return (
     <Card>
       <CardContent>
@@ -529,19 +545,15 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
         <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
           <Table stickyHeader aria-label="api monitor data table">
             {/* Adjusted TableHead formatting to prevent whitespace issues */}
-            <TableHead><TableRow>
-                <TableCell>Project Name</TableCell> {/* Updated column header */}
-                <TableCell>Server</TableCell> {/* Updated column header */}
-                <TableCell align="right">Total Count</TableCell>
-                <TableCell align="right">Success Count</TableCell>
-                <TableCell align="right">Failure Count</TableCell>
-                <TableCell align="right">Latency</TableCell> {/* Renamed column header */}
-                {/* Removed Status column header */}
-              </TableRow></TableHead>
+            <TableHead>
+              <TableRow>
+                <TableCell>Project Name</TableCell><TableCell>Server</TableCell><TableCell align="right">Status</TableCell><TableCell align="right">Total Count</TableCell><TableCell align="right">Success Count</TableCell><TableCell align="right">Failure Count</TableCell><TableCell align="right">Latency</TableCell>
+              </TableRow>
+            </TableHead>
             <TableBody>
               {monitorRecords.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center"> {/* Updated colspan from 7 to 6 */}
+                  <TableCell colSpan={7} align="center"> {/* Updated colspan from 6 to 7 */}
                     No API records found for the selected filters.
                   </TableCell>
                 </TableRow>
@@ -550,6 +562,7 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
                   <TableRow key={record.projectName + record.server + index}> {/* Updated key */}
                     <TableCell>{record.projectName}</TableCell> {/* Updated data field */}
                     <TableCell>{record.server}</TableCell> {/* Updated data field */}
+                    <TableCell sx={{ backgroundColor: getStatusBackgroundColor(record.status), borderRadius: '8px', p: 1 }}>{record.status}</TableCell>
                     <TableCell align="right">{record.totalCount}</TableCell>
                     <TableCell align="right">{record.successCount}</TableCell>
                     <TableCell align="right">{record.failureCount}</TableCell>
@@ -843,10 +856,19 @@ const MiniTrendGraph: React.FC<MiniTrendGraphProps> = ({ history, label, unit, c
 interface ErrorRateTrendsProps {
   monitorRecords: MonitorDataResult[]; // Changed to MonitorDataResult[]
   themeMode: 'light' | 'dark';
+  appliedStartDate: Date | null; // Added for MiniTrendGraph filtering
+  appliedEndDate: Date | null;   // Added for MiniTrendGraph filtering
 }
 
-const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ monitorRecords, themeMode }) => {
+const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ monitorRecords, themeMode, appliedStartDate, appliedEndDate }) => {
   const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
+
+  // Function to create a synthetic history for MiniTrendGraph
+  const createSyntheticHistory = (failureCount: number, timestamp: Date | null) => {
+    const ts = timestamp || new Date(); // Use appliedEndDate or current date if no end date
+    return [{ value: failureCount, timestamp: ts }];
+  };
+
   return (
     <Card>
       <CardContent>
@@ -868,7 +890,15 @@ const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ monitorRecords, theme
                   <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
                     Server: {record.server}
                   </Typography>
-                  {/* MiniTrendGraph removed as MonitorDataResult does not contain historical data */}
+                  <MiniTrendGraph
+                    history={createSyntheticHistory(record.failureCount, appliedEndDate)} // Pass synthetic history
+                    label="Error Count" // Changed label for clarity
+                    unit="errors"
+                    color={currentTheme.palette.error.main}
+                    appliedStartDate={appliedStartDate}
+                    appliedEndDate={appliedEndDate}
+                    themeMode={themeMode}
+                  />
                   <Typography variant="body2" component="span" sx={{ mt: 1 }}>
                     Current Errors: <Chip label={`${record.failureCount} errors`} size="small" color={record.failureCount > 10 ? 'error' : record.failureCount > 3 ? 'warning' : 'success'} />
                   </Typography>
@@ -1186,12 +1216,12 @@ const App: React.FC = () => {
     // Process Start Date
     if (startDateString) {
       newAppliedStartDate = new Date(startDateString);
-      newAppliedStartDate.setHours(0, 0, 0, 0);
+      // No need to set hours, minutes, seconds, milliseconds to 0 as datetime-local already includes time
     }
     // Process End Date
     if (endDateString) {
       newAppliedEndDate = new Date(endDateString);
-      newAppliedEndDate.setHours(23, 59, 59, 999);
+      // No need to set hours, minutes, seconds, milliseconds to 999 as datetime-local already includes time
     }
 
     // Process Timespan from dropdown
@@ -1417,7 +1447,7 @@ const App: React.FC = () => {
               {/* Start Date */}
               <TextField
                 label="From Date"
-                type="date"
+                type="datetime-local" // Changed type to datetime-local
                 value={startDateString}
                 onChange={(e) => { setStartDateString(e.target.value); setSelectedTimeRange(''); }}
                 InputLabelProps={{ shrink: true }}
@@ -1426,7 +1456,7 @@ const App: React.FC = () => {
               {/* End Date */}
               <TextField
                 label="To Date"
-                type="date"
+                type="datetime-local" // Changed type to datetime-local
                 value={endDateString}
                 onChange={(e) => { setEndDateString(e.target.value); setSelectedTimeRange(''); }}
                 InputLabelProps={{ shrink: true }}
@@ -1475,8 +1505,10 @@ const App: React.FC = () => {
 
           {activeView === 'error_trends' && (
             <ErrorRateTrends
-              monitorRecords={apiMonitorTableData} // Pass MonitorDataResult to ErrorRateTrends
+              monitorRecords={apiMonitorTableData} // Pass monitorRecords to ErrorRateTrends
               themeMode={themeMode}
+              appliedStartDate={appliedStartDate}
+              appliedEndDate={appliedEndDate}
             />
           )}
 
