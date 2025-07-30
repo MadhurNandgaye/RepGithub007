@@ -37,6 +37,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  TableSortLabel, // Import TableSortLabel for sorting
   Grid,
   InputAdornment,
 } from '@mui/material';
@@ -496,15 +497,67 @@ const OverallSummaryStatus: React.FC<{ totalEndpoints: number; healthyEndpoints:
   </Card>
 );
 
-// Renamed IndividualEndpointStatusTable to ApiMonitorDataTable
+// Comparator function for sorting
+function descendingComparator<T>(a: T, b: T, orderBy: keyof T) {
+  if (b[orderBy] < a[orderBy]) {
+    return -1;
+  }
+  if (b[orderBy] > a[orderBy]) {
+    return 1;
+  }
+  return 0;
+}
+
+type Order = 'asc' | 'desc';
+
+function getComparator<Key extends keyof any>(
+  order: Order,
+  orderBy: Key,
+): (
+  a: { [key in Key]: number | string },
+  b: { [key in Key]: number | string },
+) => number {
+  return order === 'desc'
+    ? (a, b) => descendingComparator(a, b, orderBy)
+    : (a, b) => -descendingComparator(a, b, orderBy);
+}
+
+// This is a stable sort function, important for maintaining order of equal elements
+function stableSort<T>(array: readonly T[], comparator: (a: T, b: T) => number) {
+  const stabilizedThis = array.map((el, index) => [el, index] as [T, number]);
+  stabilizedThis.sort((a, b) => {
+    const order = comparator(a[0], b[0]);
+    if (order !== 0) {
+      return order;
+    }
+    return a[1] - b[1];
+  });
+  return stabilizedThis.map((el) => el[0]);
+}
+
+
 interface ApiMonitorDataTableProps {
   monitorRecords: MonitorDataResult[];
   themeMode: 'light' | 'dark';
 }
 
 const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecords, themeMode }) => {
-  // Removed health, trend, and latency bar related props and logic
-  // as they are not part of MonitorDataResult and not requested for this table.
+  const [order, setOrder] = useState<Order>('asc');
+  const [orderBy, setOrderBy] = useState<keyof MonitorDataResult>('projectName');
+
+  const handleRequestSort = (
+    event: React.MouseEvent<unknown>,
+    property: keyof MonitorDataResult,
+  ) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
+  };
+
+  const sortedRecords = useMemo(() => {
+    return stableSort(monitorRecords, getComparator(order, orderBy));
+  }, [monitorRecords, order, orderBy]);
+
 
   // Function to determine border color based on latency
   const getLatencyBorderColor = (latency: string): string => {
@@ -521,17 +574,17 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
     }
   };
 
-  // Function to determine background color based on status
+  // Function to determine background color based on status - made more vibrant
   const getStatusBackgroundColor = (status: string): string => {
     switch (status.toLowerCase()) {
       case 'healthy':
-        return 'rgba(76, 175, 80, 0.2)'; // Green with transparency
+        return 'rgba(76, 175, 80, 0.6)'; // Green with higher transparency
       case 'degraded':
-        return 'rgba(255, 152, 0, 0.2)'; // Orange with transparency
+        return 'rgba(255, 152, 0, 0.6)'; // Orange with higher transparency
       case 'critical':
-        return 'rgba(244, 67, 54, 0.2)'; // Red with transparency
+        return 'rgba(244, 67, 54, 0.6)'; // Red with higher transparency
       default:
-        return 'rgba(158, 158, 158, 0.1)'; // Grey with transparency for unknown
+        return 'rgba(158, 158, 158, 0.3)'; // Grey with higher transparency for unknown
     }
   };
 
@@ -542,26 +595,88 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
         <Typography variant="h5" gutterBottom>
           API Monitoring Data
         </Typography>
-        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+        <TableContainer component={Paper} sx={{ borderRadius: 2, maxHeight: 400, overflowY: 'auto' }}> {/* Added maxHeight and overflowY */}
           <Table stickyHeader aria-label="api monitor data table">
             {/* Adjusted TableHead formatting to prevent whitespace issues */}
             <TableHead>
               <TableRow>
-                <TableCell>Project Name</TableCell><TableCell>Server</TableCell><TableCell align="right">Status</TableCell><TableCell align="right">Total Count</TableCell><TableCell align="right">Success Count</TableCell><TableCell align="right">Failure Count</TableCell><TableCell align="right">Latency</TableCell>
+                <TableCell sortDirection={orderBy === 'projectName' ? order : false}>
+                  <TableSortLabel
+                    active={orderBy === 'projectName'}
+                    direction={orderBy === 'projectName' ? order : 'asc'}
+                    onClick={(event) => handleRequestSort(event, 'projectName')}
+                  >
+                    Project Name
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell sortDirection={orderBy === 'server' ? order : false}>
+                  <TableSortLabel
+                    active={orderBy === 'server'}
+                    direction={orderBy === 'server' ? order : 'asc'}
+                    onClick={(event) => handleRequestSort(event, 'server')}
+                  >
+                    Server
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell align="right" sortDirection={orderBy === 'status' ? order : false}>
+                  <TableSortLabel
+                    active={orderBy === 'status'}
+                    direction={orderBy === 'status' ? order : 'asc'}
+                    onClick={(event) => handleRequestSort(event, 'status')}
+                  >
+                    Status
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell align="right" sortDirection={orderBy === 'totalCount' ? order : false}>
+                  <TableSortLabel
+                    active={orderBy === 'totalCount'}
+                    direction={orderBy === 'totalCount' ? order : 'asc'}
+                    onClick={(event) => handleRequestSort(event, 'totalCount')}
+                  >
+                    Total Count
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell align="right" sortDirection={orderBy === 'successCount' ? order : false}>
+                  <TableSortLabel
+                    active={orderBy === 'successCount'}
+                    direction={orderBy === 'successCount' ? order : 'asc'}
+                    onClick={(event) => handleRequestSort(event, 'successCount')}
+                  >
+                    Success Count
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell align="right" sortDirection={orderBy === 'failureCount' ? order : false}>
+                  <TableSortLabel
+                    active={orderBy === 'failureCount'}
+                    direction={orderBy === 'failureCount' ? order : 'asc'}
+                    onClick={(event) => handleRequestSort(event, 'failureCount')}
+                  >
+                    Failure Count
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell align="right" sortDirection={orderBy === 'latency' ? order : false}>
+                  <TableSortLabel
+                    active={orderBy === 'latency'}
+                    direction={orderBy === 'latency' ? order : 'asc'}
+                    onClick={(event) => handleRequestSort(event, 'latency')}
+                  >
+                    Latency
+                  </TableSortLabel>
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {monitorRecords.length === 0 ? (
+              {sortedRecords.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center"> {/* Updated colspan from 6 to 7 */}
+                  <TableCell colSpan={7} align="center">
                     No API records found for the selected filters.
                   </TableCell>
                 </TableRow>
               ) : (
-                monitorRecords.map((record, index) => (
-                  <TableRow key={record.projectName + record.server + index}> {/* Updated key */}
-                    <TableCell>{record.projectName}</TableCell> {/* Updated data field */}
-                    <TableCell>{record.server}</TableCell> {/* Updated data field */}
+                sortedRecords.map((record, index) => (
+                  <TableRow key={record.projectName + record.server + index}>
+                    <TableCell>{record.projectName}</TableCell>
+                    <TableCell>{record.server}</TableCell>
                     <TableCell sx={{ backgroundColor: getStatusBackgroundColor(record.status), borderRadius: '8px', p: 1 }}>{record.status}</TableCell>
                     <TableCell align="right">{record.totalCount}</TableCell>
                     <TableCell align="right">{record.successCount}</TableCell>
@@ -569,14 +684,13 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
                     <TableCell
                       align="right"
                       sx={{
-                        border: `2px solid ${getLatencyBorderColor(record.latency)}`, // Apply border based on latency
-                        borderRadius: '8px', // Ensure rounded corners are maintained
-                        p: 1, // Add some padding to make border visible
+                        border: `2px solid ${getLatencyBorderColor(record.latency)}`,
+                        borderRadius: '8px',
+                        p: 1,
                       }}
                     >
                       {record.latency}
-                    </TableCell> {/* Updated data field */}
-                    {/* Removed status cell */}
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -890,15 +1004,21 @@ const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ monitorRecords, theme
                   <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
                     Server: {record.server}
                   </Typography>
-                  <MiniTrendGraph
-                    history={createSyntheticHistory(record.failureCount, appliedEndDate)} // Pass synthetic history
-                    label="Error Count" // Changed label for clarity
-                    unit="errors"
-                    color={currentTheme.palette.error.main}
-                    appliedStartDate={appliedStartDate}
-                    appliedEndDate={appliedEndDate}
-                    themeMode={themeMode}
-                  />
+                  {record.failureCount > 0 ? ( // Conditionally render MiniTrendGraph
+                    <MiniTrendGraph
+                      history={createSyntheticHistory(record.failureCount, appliedEndDate)} // Pass synthetic history
+                      label="Error Count" // Changed label for clarity
+                      unit="errors"
+                      color={currentTheme.palette.error.main}
+                      appliedStartDate={appliedStartDate}
+                      appliedEndDate={appliedEndDate}
+                      themeMode={themeMode}
+                    />
+                  ) : (
+                    <Box sx={{ width: '100%', height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', border: '1px dashed', borderColor: currentTheme.palette.grey[400], borderRadius: 2, p: 2 }}>
+                      <Typography variant="body2">No errors recorded.</Typography>
+                    </Box>
+                  )}
                   <Typography variant="body2" component="span" sx={{ mt: 1 }}>
                     Current Errors: <Chip label={`${record.failureCount} errors`} size="small" color={record.failureCount > 10 ? 'error' : record.failureCount > 3 ? 'warning' : 'success'} />
                   </Typography>
