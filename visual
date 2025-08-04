@@ -278,6 +278,10 @@ const lightTheme = createTheme({
         head: {
           fontWeight: 600,
           backgroundColor: '#e0e0e0',
+          padding: '12px 16px', // Add padding to header cells
+        },
+        body: {
+          padding: '12px 16px', // Add padding to body cells
         },
       },
     },
@@ -349,6 +353,10 @@ const darkTheme = createTheme({
         head: {
           fontWeight: 600,
           backgroundColor: '#333333',
+          padding: '12px 16px', // Add padding to header cells
+        },
+        body: {
+          padding: '12px 16px', // Add padding to body cells
         },
       },
     },
@@ -697,7 +705,16 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
                   <TableRow key={record.projectName + record.server + index}>
                     <TableCell>{record.projectName}</TableCell>
                     <TableCell>{record.server}</TableCell>
-                    <TableCell sx={{ backgroundColor: getStatusBackgroundColor(record.status), borderRadius: '8px', p: 1 }}>{record.status}</TableCell>
+                    <TableCell
+                      sx={{
+                        backgroundColor: getStatusBackgroundColor(record.status),
+                        borderRadius: '8px',
+                        // Add a subtle border for separation
+                        border: `1px solid ${themeMode === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)'}`,
+                      }}
+                    >
+                      {record.status}
+                    </TableCell>
                     <TableCell align="right">{record.totalCount}</TableCell>
                     <TableCell align="right">{record.successCount}</TableCell>
                     <TableCell align="right">{record.failureCount}</TableCell>
@@ -706,7 +723,6 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
                       sx={{
                         border: `2px solid ${getLatencyBorderColor(record.latency)}`,
                         borderRadius: '8px',
-                        p: 1,
                       }}
                     >
                       {record.latency}
@@ -1205,6 +1221,26 @@ const App: React.FC = () => {
     return hardcodedProjectNames.sort();
   }, []);
 
+  // --- NEW LOGIC: Calculate min and max dates for the input fields ---
+  const today = useMemo(() => new Date(), []);
+  const sixtyDaysAgo = useMemo(() => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - 60);
+    return date;
+  }, [today]);
+
+  const maxDateString = useMemo(() => {
+    const date = new Date();
+    // Format to YYYY-MM-DDTHH:mm to be compatible with datetime-local input
+    return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}T${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  }, []);
+  
+  const minDateString = useMemo(() => {
+    const date = new Date(sixtyDaysAgo);
+    // Format to YYYY-MM-DDTHH:mm to be compatible with datetime-local input
+    return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}T00:00`;
+  }, [sixtyDaysAgo]);
+
   // Effect to set initial endpoint data and filter options without API calls
   useEffect(() => {
     const initializeDashboardData = () => {
@@ -1655,7 +1691,11 @@ const App: React.FC = () => {
                   }
                 }}
                 InputLabelProps={{ shrink: true }}
-                inputProps={{ id: 'startDateInput' }}
+                inputProps={{
+                  id: 'startDateInput',
+                  min: minDateString, // Set the minimum date
+                  max: maxDateString, // Set the maximum date (today)
+                }}
                 disabled={isDateFieldsDisabled} // Disable if time range is selected
               />
               {/* End Date */}
@@ -1671,7 +1711,11 @@ const App: React.FC = () => {
                   }
                 }}
                 InputLabelProps={{ shrink: true }}
-                inputProps={{ id: 'endDateInput' }}
+                inputProps={{
+                  id: 'endDateInput',
+                  min: minDateString, // Set the minimum date
+                  max: maxDateString, // Set the maximum date (today)
+                }}
                 disabled={isDateFieldsDisabled} // Disable if time range is selected
               />
               <Button
