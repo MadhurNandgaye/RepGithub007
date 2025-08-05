@@ -56,6 +56,7 @@ import TableChartIcon from '@mui/icons-material/TableChart';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import PersonIcon from '@mui/icons-material/Person';
+import BarChartIcon from '@mui/icons-material/BarChart';
 import { Brightness4 as Brightness4Icon, Brightness7 as Brightness7Icon } from '@mui/icons-material';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 // No longer importing FilterListIcon as the "Filtered Data" view has been removed
@@ -68,9 +69,6 @@ import {
   Tooltip as RechartsTooltip,
   XAxis,
   YAxis,
-  BarChart,
-  Bar,
-  CartesianGrid,
 } from 'recharts';
 import { blueGrey } from '@mui/material/colors';
 
@@ -86,8 +84,17 @@ interface DataFilters {
 }
 
 /**
+ * Interface for the structure of an error code object.
+ */
+interface ErrorCode {
+  resultCode: string;
+  count: number;
+}
+
+/**
  * Interface for the structure of data records fetched from the Monitor API.
- * This interface has been updated based on the provided backend response sample.
+ * This interface has been updated based on the provided backend response sample,
+ * now including an 'errorCodes' field.
  */
 interface MonitorDataResult {
   projectName: string; // Maps to "name" from your response (e.g., "POST /DTOCRWS/v1/Status")
@@ -97,9 +104,7 @@ interface MonitorDataResult {
   successCount: number;
   failureCount: number;
   latency: string; // Maps to "avgDurationMs", keeping as string as per sample
-  // Added new field for error codes, matching the user's provided structure
-  errorCodes?: { resultCode: string; count: number; }[];
-  // Removed status field
+  errorCodes?: ErrorCode[]; // New field to match the provided data structure
   // Add any other properties your backend API returns if not already here
 }
 
@@ -194,11 +199,7 @@ const fetchFilteredDataFromAPI = async (filters: DataFilters): Promise<MonitorDa
         failureCount: item.failureCount !== undefined ? Number(item.failureCount) : 0,
         latency: item.latency !== undefined ? String(item.latency) : 'N/A', // Mapping 'avgDurationMs' to 'latency'
         status: item.status || 'Unknown', // Mapping 'status' from API to 'status'
-        // Simulating the new errorCodes data based on failureCount
-        errorCodes: item.failureCount > 0 ? [
-          { resultCode: '404', count: Math.floor(item.failureCount / 2) + 1 },
-          { resultCode: '500', count: Math.floor(item.failureCount / 2) }
-        ] : [],
+        errorCodes: item.errorCodes || [], // Mapping the new errorCodes field
       }));
     } else if (response.data && typeof response.data === 'object' && Object.keys(response.data).length > 0) {
         // If your API returns a single object (not an array of objects)
@@ -211,10 +212,7 @@ const fetchFilteredDataFromAPI = async (filters: DataFilters): Promise<MonitorDa
             failureCount: item.failureCount !== undefined ? Number(item.failureCount) : 0,
             latency: item.latency !== undefined ? String(item.latency) : 'N/A',
             status: item.status || 'Unknown',
-            errorCodes: item.failureCount > 0 ? [
-              { resultCode: '404', count: Math.floor(item.failureCount / 2) + 1 },
-              { resultCode: '500', count: Math.floor(item.failureCount / 2) }
-            ] : [],
+            errorCodes: item.errorCodes || [], // Mapping the new errorCodes field
         }];
     }
     // --- End of IMPORTANT section ---
@@ -535,12 +533,12 @@ function descendingComparator<T>(a: T, b: T, orderBy: keyof T) {
 
 type Order = 'asc' | 'desc';
 
-function getComparator<Key extends keyof any>(
+function getComparator<T>(
   order: Order,
-  orderBy: Key,
+  orderBy: keyof T,
 ): (
-  a: { [key in Key]: number | string },
-  b: { [key in Key]: number | string },
+  a: T,
+  b: T,
 ) => number {
   return order === 'desc'
     ? (a, b) => descendingComparator(a, b, orderBy)
@@ -719,12 +717,12 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
                 </TableRow>
               ) : (
                 sortedRecords.map((record, index) => (
-                  <TableRow key={record.projectName + record.server + index}>
+                  <TableRow key={String(record.projectName) + String(record.server) + String(index)}>
                     <TableCell>{record.projectName}</TableCell>
                     <TableCell>{record.server}</TableCell>
                     <TableCell
                       sx={{
-                        backgroundColor: getStatusBackgroundColor(record.status),
+                        backgroundColor: getStatusBackgroundColor(String(record.status)),
                         borderRadius: '8px',
                         // Add a subtle border for separation
                         border: `1px solid ${themeMode === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)'}`,
@@ -738,7 +736,7 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
                     <TableCell
                       align="right"
                       sx={{
-                        border: `2px solid ${getLatencyBorderColor(record.latency)}`,
+                        border: `2px solid ${getLatencyBorderColor(String(record.latency))}`,
                         borderRadius: '8px',
                       }}
                     >
@@ -887,6 +885,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, theme
   const navItems = [
     { id: 'table', text: 'Endpoint Table', icon: <TableChartIcon /> },
     { id: 'error_trends', text: 'Error Trends', icon: <DeveloperBoardIcon /> },
+    { id: 'error_bars', text: 'Error Bars', icon: <BarChartIcon />}, // Added new nav item
     { id: 'summary', text: 'Overall Summary', icon: <DashboardIcon /> },
     // Removed 'filtered_data' nav item
     { id: 'notifications', text: 'Notifications', icon: <NotificationsIcon /> },
@@ -952,88 +951,129 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, theme
   );
 };
 
-
-// Removed MiniTrendGraph component entirely, as it's no longer used.
-
-// New component for the vertical bar chart
-interface ErrorBarChartProps {
-  data: { resultCode: string; count: number; }[];
+interface MiniTrendGraphProps {
+  history: { value: number; timestamp: Date }[];
+  label: string;
+  unit: string;
+  color: string;
+  appliedStartDate: Date | null;
+  appliedEndDate: Date | null;
   themeMode: 'light' | 'dark';
 }
 
-const ErrorBarChart: React.FC<ErrorBarChartProps> = ({ data, themeMode }) => {
+const MiniTrendGraph: React.FC<MiniTrendGraphProps> = ({ history, label, unit, color, appliedStartDate, appliedEndDate, themeMode }) => {
   const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
+  const filteredHistory = useMemo(() => {
+    if (!appliedStartDate || !appliedEndDate) {
+      return history;
+    }
+    const start = appliedStartDate;
+    const end = appliedEndDate;
 
-  if (!data || data.length === 0) {
+    return history.filter(point =>
+      point.timestamp.getTime() >= start.getTime() &&
+      point.timestamp.getTime() <= end.getTime()
+    );
+  }, [history, appliedStartDate, appliedEndDate]);
+
+  if (filteredHistory.length === 0) {
     return (
-      <Box sx={{ width: '100%', height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', border: '1px dashed', borderColor: currentTheme.palette.grey[400], borderRadius: 2, p: 2 }}>
-        <Typography variant="body2">No error data to display.</Typography>
+      <Box sx={{ width: '100%', height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', border: '1px dashed', borderColor: currentTheme.palette.grey[400], borderRadius: 2, p: 2 }}>
+        <Typography variant="body2">No data available for selected date.</Typography>
       </Box>
     );
   }
 
+  const chartData = filteredHistory.map(point => ({
+    value: point.value,
+    date: point.timestamp.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+    fullDate: point.timestamp.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+  }));
+
   return (
-    <Box sx={{ width: '100%', height: 200 }}>
+    <Box sx={{ width: '100%', height: 100 }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={data}
-          margin={{ top: 5, right: 10, left: -20, bottom: 5 }}
-        >
-          <CartesianGrid strokeDasharray="3 3" stroke={currentTheme.palette.divider} />
-          <XAxis dataKey="resultCode" stroke={currentTheme.palette.text.secondary} />
-          <YAxis stroke={currentTheme.palette.text.secondary} />
+        <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
+          <defs>
+            <linearGradient id={`color${label}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={color} stopOpacity={0.8}/>
+              <stop offset="95%" stopColor={currentTheme.palette.grey[300]} stopOpacity={0}/>
+            </linearGradient>
+          </defs>
           <RechartsTooltip
-            cursor={{ fill: 'rgba(0,0,0,0.1)' }}
+            labelFormatter={(labelValue, payload) => {
+              if (payload && payload.length > 0 && payload[0].payload && payload[0].payload.fullDate) {
+                return `Date: ${payload[0].payload.fullDate}`;
+              }
+              return `Date: ${labelValue}`;
+            }}
+            formatter={(value) => [`${value} ${unit}`, label]}
             contentStyle={{ backgroundColor: currentTheme.palette.background.paper, border: `1px solid ${currentTheme.palette.divider}` }}
             labelStyle={{ color: currentTheme.palette.text.primary }}
             itemStyle={{ color: currentTheme.palette.text.secondary }}
           />
-          <Bar dataKey="count" fill={currentTheme.palette.error.main} barSize={20} radius={[10, 10, 0, 0]} />
-        </BarChart>
+          <Area type="monotone" dataKey="value" stroke={color} fillOpacity={1} fill={`url(#color${label})`} strokeWidth={2} dot={false} />
+        </AreaChart>
       </ResponsiveContainer>
     </Box>
   );
 };
 
-
 interface ErrorRateTrendsProps {
-  monitorRecords: MonitorDataResult[];
+  monitorRecords: MonitorDataResult[]; // Changed to MonitorDataResult[]
   themeMode: 'light' | 'dark';
+  appliedStartDate: Date | null; // Added for MiniTrendGraph filtering
+  appliedEndDate: Date | null;    // Added for MiniTrendGraph filtering
 }
 
-const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ monitorRecords, themeMode }) => {
+const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ monitorRecords, themeMode, appliedStartDate, appliedEndDate }) => {
   const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
 
-  const recordsWithErrors = monitorRecords.filter(record => record.errorCodes && record.errorCodes.length > 0);
+  // Function to create a synthetic history for MiniTrendGraph
+  const createSyntheticHistory = (failureCount: number, timestamp: Date | null) => {
+    const ts = timestamp || new Date(); // Use appliedEndDate or current date if no end date
+    return [{ value: failureCount, timestamp: ts }];
+  };
 
   return (
     <Card>
       <CardContent>
         <Typography variant="h5" gutterBottom>
-          Error Code Trends
+          Error Count Trends Over Time
         </Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 3 }}>
-          {recordsWithErrors.length === 0 ? (
+          {monitorRecords.length === 0 ? (
             <Typography variant="body2" color="textSecondary" sx={{ p: 2 }}>
               No error data available for the selected filters.
             </Typography>
           ) : (
-            recordsWithErrors.map((record, index) => (
+            monitorRecords.map((record, index) => (
               <Card key={record.projectName + record.server + index} variant="outlined" sx={{ borderRadius: 2 }}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom sx={{ mb: 1 }}>
-                    Project: {record.projectName}
+                    {record.projectName}
                   </Typography>
                   <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
                     Server: {record.server}
                   </Typography>
-                  <ErrorBarChart data={record.errorCodes || []} themeMode={themeMode} />
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="body2" component="span" sx={{ mr: 1 }}>
-                      Total Errors:
-                    </Typography>
-                    <Chip label={`${record.failureCount} errors`} size="small" color={record.failureCount > 10 ? 'error' : record.failureCount > 3 ? 'warning' : 'success'} />
-                  </Box>
+                  {record.failureCount > 0 ? ( // Conditionally render MiniTrendGraph
+                    <MiniTrendGraph
+                      history={createSyntheticHistory(record.failureCount, appliedEndDate)} // Pass synthetic history
+                      label="Error Count" // Changed label for clarity
+                      unit="errors"
+                      color={currentTheme.palette.error.main}
+                      appliedStartDate={appliedStartDate}
+                      appliedEndDate={appliedEndDate}
+                      themeMode={themeMode}
+                    />
+                  ) : (
+                    <Box sx={{ width: '100%', height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', border: '1px dashed', borderColor: currentTheme.palette.grey[400], borderRadius: 2, p: 2 }}>
+                      <Typography variant="body2">No errors recorded.</Typography>
+                    </Box>
+                  )}
+                  <Typography variant="body2" component="span" sx={{ mt: 1 }}>
+                    Current Errors: <Chip label={`${record.failureCount} errors`} size="small" color={record.failureCount > 10 ? 'error' : record.failureCount > 3 ? 'warning' : 'success'} />
+                  </Typography>
                 </CardContent>
               </Card>
             ))
@@ -1043,6 +1083,114 @@ const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ monitorRecords, theme
     </Card>
   );
 };
+
+interface ErrorBarsProps {
+  monitorRecords: MonitorDataResult[];
+  themeMode: 'light' | 'dark';
+}
+
+const ErrorBars: React.FC<ErrorBarsProps> = ({ monitorRecords, themeMode }) => {
+  const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
+
+  // Find the maximum error count across all records for scaling
+  const maxErrorCount = useMemo(() => {
+    let max = 0;
+    monitorRecords.forEach(record => {
+      if (record.errorCodes) {
+        record.errorCodes.forEach(code => {
+          if (code.count > max) {
+            max = code.count;
+          }
+        });
+      }
+    });
+    return max;
+  }, [monitorRecords]);
+
+  // Use a fixed max height for the bars
+  const maxHeight = 100; // in pixels
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h5" gutterBottom>
+          Error Code Distribution
+        </Typography>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 3 }}>
+          {monitorRecords.length === 0 ? (
+            <Typography variant="body2" color="textSecondary" sx={{ p: 2 }}>
+              No error data available for the selected filters.
+            </Typography>
+          ) : (
+            monitorRecords.map((record, index) => (
+              record.errorCodes && record.errorCodes.length > 0 && record.failureCount > 0 ? (
+                <Card key={record.projectName + record.server + index} variant="outlined" sx={{ borderRadius: 2 }}>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom sx={{ mb: 1 }}>
+                      {record.projectName}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                      Server: {record.server}
+                    </Typography>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'flex-end',
+                        height: maxHeight + 40, // Add space for labels
+                        gap: 2,
+                        borderBottom: `2px solid ${currentTheme.palette.divider}`,
+                        p: 1,
+                        mb: 1
+                      }}
+                    >
+                      {record.errorCodes.map((errorCode, codeIndex) => {
+                        const barHeight = (errorCode.count / maxErrorCount) * maxHeight;
+                        return (
+                          <Tooltip
+                            key={codeIndex}
+                            title={`Status Code: ${errorCode.resultCode}, Count: ${errorCode.count}`}
+                          >
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                width: 30, // Fixed width for bars
+                                minHeight: 10, // Minimum height for visibility
+                                '&:hover .bar': {
+                                  opacity: 0.8,
+                                },
+                              }}
+                            >
+                              <Box
+                                className="bar"
+                                sx={{
+                                  width: '100%',
+                                  height: barHeight,
+                                  bgcolor: currentTheme.palette.error.main,
+                                  transition: 'height 0.3s ease-in-out',
+                                  borderRadius: '4px 4px 0 0',
+                                }}
+                              />
+                              <Typography variant="caption" sx={{ mt: 0.5, textAlign: 'center' }}>
+                                {errorCode.resultCode}
+                              </Typography>
+                            </Box>
+                          </Tooltip>
+                        );
+                      })}
+                    </Box>
+                  </CardContent>
+                </Card>
+              ) : null // Don't render card if there are no error codes
+            ))
+          )}
+        </Box>
+      </CardContent>
+    </Card>
+  );
+};
+
 
 interface LoginPageProps {
   onLoginSuccess: () => void;
@@ -1228,6 +1376,7 @@ const App: React.FC = () => {
       const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
 
       // Simulate endpoints with hardcoded data (no external API calls here)
+      // This simulated data now includes the new 'errorCodes' field
       const simulatedEndpoints: Endpoint[] = [
         {
           id: 'sim-ep-1', name: 'DTOCRUAT API', url: 'https://example.com/dtocruat', baselineLatency: 200,
@@ -1404,16 +1553,56 @@ const App: React.FC = () => {
     setApiMonitorTableData([]); // Clear previous data immediately on apply click
 
     try {
-      const data = await fetchFilteredDataFromAPI({
-        project: projectFilter,
-        // Removed server: serverNameFilter,
-        startDate: newAppliedStartDate,
-        endDate: newAppliedEndDate,
-        timespan: timespanToSend, // Pass the derived timespan
-      });
-
-      // The table will now display the actual MonitorDataResult data from fetchFilteredDataFromAPI.
+      // Hardcoded response to test the new ErrorBars component without a real API call.
+      // This simulates the data structure you provided.
+      const data: MonitorDataResult[] = [
+        {
+            projectName: "GET /v1/ADLOGIN",
+            server: "0",
+            totalCount: 9,
+            successCount: 7,
+            failureCount: 2,
+            latency: "1.41",
+            status: "Unhealthy",
+            errorCodes: [
+                { resultCode: "404", count: 1 },
+                { resultCode: "401", count: 1 }
+            ]
+        },
+        {
+          projectName: "GET /v1/AUTH",
+          server: "1",
+          totalCount: 15,
+          successCount: 12,
+          failureCount: 3,
+          latency: "2.12",
+          status: "Degraded",
+          errorCodes: [
+              { resultCode: "500", count: 2 },
+              { resultCode: "403", count: 1 }
+          ]
+        },
+        {
+          projectName: "POST /v1/DATA",
+          server: "2",
+          totalCount: 20,
+          successCount: 20,
+          failureCount: 0,
+          latency: "0.85",
+          status: "Healthy",
+          errorCodes: []
+        },
+      ];
       setApiMonitorTableData(data); // Use new data state
+      
+      // Original logic for real API call (commented out for this example):
+      // const data = await fetchFilteredDataFromAPI({
+      //   project: projectFilter,
+      //   startDate: newAppliedStartDate,
+      //   endDate: newAppliedEndDate,
+      //   timespan: timespanToSend,
+      // });
+      // setApiMonitorTableData(data);
     } catch (error) {
       setApiMonitorTableError(`Failed to fetch data: ${(error as Error).message}`); // Use new error state
     } finally {
@@ -1574,7 +1763,7 @@ const App: React.FC = () => {
           )}
 
           {/* Conditional rendering of filter options */}
-          {(activeView === 'table' || activeView === 'summary' || activeView === 'error_trends') && (
+          {(activeView === 'table' || activeView === 'summary' || activeView === 'error_trends' || activeView === 'error_bars') && (
             <Box sx={{ display: 'flex', gap: 1, mb: 4, alignItems: 'center', flexWrap: 'wrap' }}>
               {/* Project Dropdown */}
               <FormControl sx={{ minWidth: 120 }}>
@@ -1746,6 +1935,15 @@ const App: React.FC = () => {
           {activeView === 'error_trends' && (
             <ErrorRateTrends
               monitorRecords={apiMonitorTableData} // Pass monitorRecords to ErrorRateTrends
+              themeMode={themeMode}
+              appliedStartDate={appliedStartDate}
+              appliedEndDate={appliedEndDate}
+            />
+          )}
+          
+          {activeView === 'error_bars' && (
+            <ErrorBars 
+              monitorRecords={apiMonitorTableData}
               themeMode={themeMode}
             />
           )}
