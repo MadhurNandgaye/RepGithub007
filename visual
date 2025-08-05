@@ -16,7 +16,6 @@ import {
   ListItemText,
   Divider,
   Button,
-  Grid,
   Select,
   MenuItem,
   InputLabel,
@@ -282,8 +281,8 @@ function descendingComparator<T>(a: T, b: T, orderBy: keyof T) {
   }
   if (b[orderBy] > a[orderBy]) {
     return 1;
-  }
-  return 0;
+    }
+    return 0;
 }
 
 const ApiMonitorDataTable = ({ data, loading, error, onDownload }) => {
@@ -686,79 +685,79 @@ export default function App() {
             <Typography variant="h6" gutterBottom>
               Filters
             </Typography>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth>
-                  <InputLabel id="project-name-label">Project Name</InputLabel>
-                  <Select
-                    labelId="project-name-label"
-                    id="project-name-select"
-                    value={projectNameFilter}
-                    label="Project Name"
-                    onChange={(e) => setProjectNameFilter(e.target.value as string)}
-                  >
-                    <MenuItem value="">All</MenuItem>
-                    {projectNames.map((name) => (
-                      <MenuItem key={name} value={name}>
-                        {name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth>
-                  <InputLabel id="time-range-label">Time Range</InputLabel>
-                  <Select
-                    labelId="time-range-label"
-                    id="time-range-select"
-                    value={timeRangeFilter}
-                    label="Time Range"
-                    onChange={(e) => setTimeRangeFilter(e.target.value)}
-                  >
-                    <MenuItem value="last7days">Last 7 days</MenuItem>
-                    <MenuItem value="last30days">Last 30 days</MenuItem>
-                    <MenuItem value="last24hours">Last 24 hours</MenuItem>
-                    <MenuItem value="custom">Custom</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: { xs: 'column', md: 'row' },
+                gap: 2,
+                alignItems: { xs: 'stretch', md: 'center' },
+              }}
+            >
+              <FormControl sx={{ flex: 1, minWidth: 200 }}>
+                <InputLabel id="project-name-label">Project Name</InputLabel>
+                <Select
+                  labelId="project-name-label"
+                  id="project-name-select"
+                  value={projectNameFilter}
+                  label="Project Name"
+                  onChange={(e) => setProjectNameFilter(e.target.value as string)}
+                >
+                  <MenuItem value="">All</MenuItem>
+                  {projectNames.map((name) => (
+                    <MenuItem key={name} value={name}>
+                      {name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl sx={{ flex: 1, minWidth: 200 }}>
+                <InputLabel id="time-range-label">Time Range</InputLabel>
+                <Select
+                  labelId="time-range-label"
+                  id="time-range-select"
+                  value={timeRangeFilter}
+                  label="Time Range"
+                  onChange={(e) => setTimeRangeFilter(e.target.value)}
+                >
+                  <MenuItem value="last7days">Last 7 days</MenuItem>
+                  <MenuItem value="last30days">Last 30 days</MenuItem>
+                  <MenuItem value="last24hours">Last 24 hours</MenuItem>
+                  <MenuItem value="custom">Custom</MenuItem>
+                </Select>
+              </FormControl>
+
               {timeRangeFilter === 'custom' && (
                 <>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <TextField
-                      label="From Date"
-                      type="datetime-local"
-                      fullWidth
-                      InputLabelProps={{ shrink: true }}
-                      value={fromDateFilter}
-                      onChange={(e) => setFromDateFilter(e.target.value)}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <TextField
-                      label="To Date"
-                      type="datetime-local"
-                      fullWidth
-                      InputLabelProps={{ shrink: true }}
-                      value={toDateFilter}
-                      onChange={(e) => setToDateFilter(e.target.value)}
-                    />
-                  </Grid>
+                  <TextField
+                    label="From Date"
+                    type="datetime-local"
+                    sx={{ flex: 1, minWidth: 200 }}
+                    InputLabelProps={{ shrink: true }}
+                    value={fromDateFilter}
+                    onChange={(e) => setFromDateFilter(e.target.value)}
+                  />
+                  <TextField
+                    label="To Date"
+                    type="datetime-local"
+                    sx={{ flex: 1, minWidth: 200 }}
+                    InputLabelProps={{ shrink: true }}
+                    value={toDateFilter}
+                    onChange={(e) => setToDateFilter(e.target.value)}
+                  />
                 </>
               )}
-              <Grid item xs={12} md={3}>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  fullWidth
-                  onClick={handleApplyFilter}
-                  startIcon={<FilterListIcon />}
-                >
-                  Apply
-                </Button>
-              </Grid>
-            </Grid>
+
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleApplyFilter}
+                startIcon={<FilterListIcon />}
+                sx={{ flex: 1, minWidth: 150 }}
+              >
+                Apply
+              </Button>
+            </Box>
           </Paper>
 
           {/* Main Content Render */}
