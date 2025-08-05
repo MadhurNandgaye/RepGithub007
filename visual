@@ -68,6 +68,9 @@ import {
   Tooltip as RechartsTooltip,
   XAxis,
   YAxis,
+  BarChart,
+  Bar,
+  CartesianGrid,
 } from 'recharts';
 import { blueGrey } from '@mui/material/colors';
 
@@ -94,6 +97,8 @@ interface MonitorDataResult {
   successCount: number;
   failureCount: number;
   latency: string; // Maps to "avgDurationMs", keeping as string as per sample
+  // Added new field for error codes, matching the user's provided structure
+  errorCodes?: { resultCode: string; count: number; }[];
   // Removed status field
   // Add any other properties your backend API returns if not already here
 }
@@ -189,6 +194,11 @@ const fetchFilteredDataFromAPI = async (filters: DataFilters): Promise<MonitorDa
         failureCount: item.failureCount !== undefined ? Number(item.failureCount) : 0,
         latency: item.latency !== undefined ? String(item.latency) : 'N/A', // Mapping 'avgDurationMs' to 'latency'
         status: item.status || 'Unknown', // Mapping 'status' from API to 'status'
+        // Simulating the new errorCodes data based on failureCount
+        errorCodes: item.failureCount > 0 ? [
+          { resultCode: '404', count: Math.floor(item.failureCount / 2) + 1 },
+          { resultCode: '500', count: Math.floor(item.failureCount / 2) }
+        ] : [],
       }));
     } else if (response.data && typeof response.data === 'object' && Object.keys(response.data).length > 0) {
         // If your API returns a single object (not an array of objects)
@@ -201,6 +211,10 @@ const fetchFilteredDataFromAPI = async (filters: DataFilters): Promise<MonitorDa
             failureCount: item.failureCount !== undefined ? Number(item.failureCount) : 0,
             latency: item.latency !== undefined ? String(item.latency) : 'N/A',
             status: item.status || 'Unknown',
+            errorCodes: item.failureCount > 0 ? [
+              { resultCode: '404', count: Math.floor(item.failureCount / 2) + 1 },
+              { resultCode: '500', count: Math.floor(item.failureCount / 2) }
+            ] : [],
         }];
     }
     // --- End of IMPORTANT section ---
@@ -938,129 +952,88 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, theme
   );
 };
 
-interface MiniTrendGraphProps {
-  history: { value: number; timestamp: Date }[];
-  label: string;
-  unit: string;
-  color: string;
-  appliedStartDate: Date | null;
-  appliedEndDate: Date | null;
+
+// Removed MiniTrendGraph component entirely, as it's no longer used.
+
+// New component for the vertical bar chart
+interface ErrorBarChartProps {
+  data: { resultCode: string; count: number; }[];
   themeMode: 'light' | 'dark';
 }
 
-const MiniTrendGraph: React.FC<MiniTrendGraphProps> = ({ history, label, unit, color, appliedStartDate, appliedEndDate, themeMode }) => {
+const ErrorBarChart: React.FC<ErrorBarChartProps> = ({ data, themeMode }) => {
   const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
-  const filteredHistory = useMemo(() => {
-    if (!appliedStartDate || !appliedEndDate) {
-      return history;
-    }
-    const start = appliedStartDate;
-    const end = appliedEndDate;
 
-    return history.filter(point =>
-      point.timestamp.getTime() >= start.getTime() &&
-      point.timestamp.getTime() <= end.getTime()
-    );
-  }, [history, appliedStartDate, appliedEndDate]);
-
-  if (filteredHistory.length === 0) {
+  if (!data || data.length === 0) {
     return (
-      <Box sx={{ width: '100%', height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', border: '1px dashed', borderColor: currentTheme.palette.grey[400], borderRadius: 2, p: 2 }}>
-        <Typography variant="body2">No data available for selected date.</Typography>
+      <Box sx={{ width: '100%', height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', border: '1px dashed', borderColor: currentTheme.palette.grey[400], borderRadius: 2, p: 2 }}>
+        <Typography variant="body2">No error data to display.</Typography>
       </Box>
     );
   }
 
-  const chartData = filteredHistory.map(point => ({
-    value: point.value,
-    date: point.timestamp.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-    fullDate: point.timestamp.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-  }));
-
   return (
-    <Box sx={{ width: '100%', height: 100 }}>
+    <Box sx={{ width: '100%', height: 200 }}>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
-          <defs>
-            <linearGradient id={`color${label}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={color} stopOpacity={0.8}/>
-              <stop offset="95%" stopColor={currentTheme.palette.grey[300]} stopOpacity={0}/>
-            </linearGradient>
-          </defs>
+        <BarChart
+          data={data}
+          margin={{ top: 5, right: 10, left: -20, bottom: 5 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke={currentTheme.palette.divider} />
+          <XAxis dataKey="resultCode" stroke={currentTheme.palette.text.secondary} />
+          <YAxis stroke={currentTheme.palette.text.secondary} />
           <RechartsTooltip
-            labelFormatter={(labelValue, payload) => {
-              if (payload && payload.length > 0 && payload[0].payload && payload[0].payload.fullDate) {
-                return `Date: ${payload[0].payload.fullDate}`;
-              }
-              return `Date: ${labelValue}`;
-            }}
-            formatter={(value) => [`${value} ${unit}`, label]}
+            cursor={{ fill: 'rgba(0,0,0,0.1)' }}
             contentStyle={{ backgroundColor: currentTheme.palette.background.paper, border: `1px solid ${currentTheme.palette.divider}` }}
             labelStyle={{ color: currentTheme.palette.text.primary }}
             itemStyle={{ color: currentTheme.palette.text.secondary }}
           />
-          <Area type="monotone" dataKey="value" stroke={color} fillOpacity={1} fill={`url(#color${label})`} strokeWidth={2} dot={false} />
-        </AreaChart>
+          <Bar dataKey="count" fill={currentTheme.palette.error.main} barSize={20} radius={[10, 10, 0, 0]} />
+        </BarChart>
       </ResponsiveContainer>
     </Box>
   );
 };
 
+
 interface ErrorRateTrendsProps {
-  monitorRecords: MonitorDataResult[]; // Changed to MonitorDataResult[]
+  monitorRecords: MonitorDataResult[];
   themeMode: 'light' | 'dark';
-  appliedStartDate: Date | null; // Added for MiniTrendGraph filtering
-  appliedEndDate: Date | null;   // Added for MiniTrendGraph filtering
 }
 
-const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ monitorRecords, themeMode, appliedStartDate, appliedEndDate }) => {
+const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ monitorRecords, themeMode }) => {
   const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
 
-  // Function to create a synthetic history for MiniTrendGraph
-  const createSyntheticHistory = (failureCount: number, timestamp: Date | null) => {
-    const ts = timestamp || new Date(); // Use appliedEndDate or current date if no end date
-    return [{ value: failureCount, timestamp: ts }];
-  };
+  const recordsWithErrors = monitorRecords.filter(record => record.errorCodes && record.errorCodes.length > 0);
 
   return (
     <Card>
       <CardContent>
         <Typography variant="h5" gutterBottom>
-          Error Count Trends Over Time
+          Error Code Trends
         </Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 3 }}>
-          {monitorRecords.length === 0 ? (
+          {recordsWithErrors.length === 0 ? (
             <Typography variant="body2" color="textSecondary" sx={{ p: 2 }}>
               No error data available for the selected filters.
             </Typography>
           ) : (
-            monitorRecords.map((record, index) => (
+            recordsWithErrors.map((record, index) => (
               <Card key={record.projectName + record.server + index} variant="outlined" sx={{ borderRadius: 2 }}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom sx={{ mb: 1 }}>
-                    {record.projectName}
+                    Project: {record.projectName}
                   </Typography>
                   <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
                     Server: {record.server}
                   </Typography>
-                  {record.failureCount > 0 ? ( // Conditionally render MiniTrendGraph
-                    <MiniTrendGraph
-                      history={createSyntheticHistory(record.failureCount, appliedEndDate)} // Pass synthetic history
-                      label="Error Count" // Changed label for clarity
-                      unit="errors"
-                      color={currentTheme.palette.error.main}
-                      appliedStartDate={appliedStartDate}
-                      appliedEndDate={appliedEndDate}
-                      themeMode={themeMode}
-                    />
-                  ) : (
-                    <Box sx={{ width: '100%', height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', border: '1px dashed', borderColor: currentTheme.palette.grey[400], borderRadius: 2, p: 2 }}>
-                      <Typography variant="body2">No errors recorded.</Typography>
-                    </Box>
-                  )}
-                  <Typography variant="body2" component="span" sx={{ mt: 1 }}>
-                    Current Errors: <Chip label={`${record.failureCount} errors`} size="small" color={record.failureCount > 10 ? 'error' : record.failureCount > 3 ? 'warning' : 'success'} />
-                  </Typography>
+                  <ErrorBarChart data={record.errorCodes || []} themeMode={themeMode} />
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="body2" component="span" sx={{ mr: 1 }}>
+                      Total Errors:
+                    </Typography>
+                    <Chip label={`${record.failureCount} errors`} size="small" color={record.failureCount > 10 ? 'error' : record.failureCount > 3 ? 'warning' : 'success'} />
+                  </Box>
                 </CardContent>
               </Card>
             ))
@@ -1774,8 +1747,6 @@ const App: React.FC = () => {
             <ErrorRateTrends
               monitorRecords={apiMonitorTableData} // Pass monitorRecords to ErrorRateTrends
               themeMode={themeMode}
-              appliedStartDate={appliedStartDate}
-              appliedEndDate={appliedEndDate}
             />
           )}
 
