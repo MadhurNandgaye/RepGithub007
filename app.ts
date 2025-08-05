@@ -736,7 +736,7 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
                       align="right"
                       sx={{
                         border: `2px solid ${getLatencyBorderColor(String(record.latency))}`,
-                        borderRadius: '8px',
+                        borderRadius: '8-px',
                       }}
                     >
                       {record.latency}
@@ -1077,7 +1077,7 @@ const ErrorBars: React.FC<ErrorBarsProps> = ({ monitorRecords, themeMode }) => {
                       }}
                     >
                       {record.errorCodes.map((errorCode, codeIndex) => {
-                        const barHeight = (errorCode.count / maxErrorCount) * maxHeight;
+                        const barHeight = (errorCode.count > 0) ? Math.max((errorCode.count / maxErrorCount) * maxHeight, 5) : 0;
                         return (
                           <Tooltip
                             key={codeIndex}
@@ -1089,12 +1089,14 @@ const ErrorBars: React.FC<ErrorBarsProps> = ({ monitorRecords, themeMode }) => {
                                 flexDirection: 'column',
                                 alignItems: 'center',
                                 width: 30, // Fixed width for bars
-                                minHeight: 10, // Minimum height for visibility
                                 '&:hover .bar': {
                                   opacity: 0.8,
                                 },
                               }}
                             >
+                              <Typography variant="caption" sx={{ mb: 0.5 }}>
+                                {errorCode.count}
+                              </Typography>
                               <Box
                                 className="bar"
                                 sx={{
