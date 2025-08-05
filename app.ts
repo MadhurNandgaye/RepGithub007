@@ -1020,9 +1020,10 @@ const MiniTrendGraph: React.FC<MiniTrendGraphProps> = ({ history, label, unit, c
 interface ErrorBarsProps {
   monitorRecords: MonitorDataResult[];
   themeMode: 'light' | 'dark';
+  loading: boolean;
 }
 
-const ErrorBars: React.FC<ErrorBarsProps> = ({ monitorRecords, themeMode }) => {
+const ErrorBars: React.FC<ErrorBarsProps> = ({ monitorRecords, themeMode, loading }) => {
   const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
 
   // Find the maximum error count across all records for scaling
@@ -1044,13 +1045,32 @@ const ErrorBars: React.FC<ErrorBarsProps> = ({ monitorRecords, themeMode }) => {
   const maxHeight = 100; // in pixels
 
   return (
-    <Card>
+    <Card sx={{ position: 'relative' }}>
       <CardContent>
         <Typography variant="h5" gutterBottom>
           Error Code Distribution
         </Typography>
+        {loading && ( // Conditional loading overlay
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              bgcolor: 'rgba(0, 0, 0, 0.5)', // Semi-transparent overlay
+              zIndex: 100, // Ensure it's on top
+              borderRadius: 2,
+            }}
+          >
+            <CircularProgress color="primary" />
+          </Box>
+        )}
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 3 }}>
-          {monitorRecords.length === 0 ? (
+          {monitorRecords.length === 0 && !loading ? (
             <Typography variant="body2" color="textSecondary" sx={{ p: 2 }}>
               No error data available for the selected filters.
             </Typography>
@@ -1606,6 +1626,22 @@ const App: React.FC = () => {
     setShowLogoutConfirm(false);
   };
 
+  const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setStartDateString(e.target.value);
+    setSelectedTimeRange(''); // Clear time range
+  };
+
+  const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEndDateString(e.target.value);
+    setSelectedTimeRange(''); // Clear time range
+  };
+  
+  const handleTimeRangeChange = (e: any) => {
+    setSelectedTimeRange(e.target.value as string);
+    setStartDateString(''); // Clear start date
+    setEndDateString(''); // Clear end date
+  };
+
   // Determine if date fields should be disabled
   const isDateFieldsDisabled = !!selectedTimeRange;
   // Determine if time range dropdown should be disabled
@@ -1711,15 +1747,7 @@ const App: React.FC = () => {
                   id="time-range-select"
                   value={selectedTimeRange}
                   label="Time Range"
-                  onChange={(e) => {
-                    setSelectedTimeRange(e.target.value as string);
-                    // Clear date fields if time range is selected
-                    if (e.target.value) {
-                      setStartDateString('');
-                      setEndDateString('');
-                    }
-                  }}
-                  disabled={isTimeRangeDisabled} // Disable if date fields have values
+                  onChange={handleTimeRangeChange}
                   sx={{ borderRadius: 2 }}
                 >
                   <MenuItem value="">
@@ -1741,40 +1769,26 @@ const App: React.FC = () => {
                 label="From Date"
                 type="datetime-local" // Changed type to datetime-local
                 value={startDateString}
-                onChange={(e) => {
-                  setStartDateString(e.target.value);
-                  // Clear time range if date field is used
-                  if (e.target.value) {
-                    setSelectedTimeRange('');
-                  }
-                }}
+                onChange={handleStartDateChange}
                 InputLabelProps={{ shrink: true }}
                 inputProps={{
                   id: 'startDateInput',
                   min: minDateString, // Set the minimum date
                   max: maxDateString, // Set the maximum date (today)
                 }}
-                disabled={isDateFieldsDisabled} // Disable if time range is selected
               />
               {/* End Date */}
               <TextField
                 label="To Date"
                 type="datetime-local" // Changed type to datetime-local
                 value={endDateString}
-                onChange={(e) => {
-                  setEndDateString(e.target.value);
-                  // Clear time range if date field is used
-                  if (e.target.value) {
-                    setSelectedTimeRange('');
-                  }
-                }}
+                onChange={handleEndDateChange}
                 InputLabelProps={{ shrink: true }}
                 inputProps={{
                   id: 'endDateInput',
                   min: minDateString, // Set the minimum date
                   max: maxDateString, // Set the maximum date (today)
                 }}
-                disabled={isDateFieldsDisabled} // Disable if time range is selected
               />
               <Button
                 variant="contained"
@@ -1829,6 +1843,7 @@ const App: React.FC = () => {
             <ErrorBars 
               monitorRecords={apiMonitorTableData}
               themeMode={themeMode}
+              loading={apiMonitorTableLoading}
             />
           )}
 
