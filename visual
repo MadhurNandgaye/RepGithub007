@@ -50,7 +50,6 @@ import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import MemoryIcon from '@mui/icons-material/Memory';
-import DeveloperBoardIcon from '@mui/icons-material/DeveloperBoard';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import NotificationsIcon from '@mui/icons-material/Notifications';
@@ -92,9 +91,18 @@ interface ErrorCode {
 }
 
 /**
+ * Interface for the structure of a time range data point.
+ */
+interface TimeRangeData {
+  time: string;
+  successCount: number;
+  failureCount: number;
+}
+
+/**
  * Interface for the structure of data records fetched from the Monitor API.
  * This interface has been updated based on the provided backend response sample,
- * now including an 'errorCodes' field.
+ * now including 'errorCodes' and 'timeRanges' fields.
  */
 interface MonitorDataResult {
   projectName: string; // Maps to "name" from your response (e.g., "POST /DTOCRWS/v1/Status")
@@ -105,7 +113,7 @@ interface MonitorDataResult {
   failureCount: number;
   latency: string; // Maps to "avgDurationMs", keeping as string as per sample
   errorCodes?: ErrorCode[]; // New field to match the provided data structure
-  // Add any other properties your backend API returns if not already here
+  timeRanges?: TimeRangeData[]; // New field for time-series data
 }
 
 /**
@@ -200,6 +208,7 @@ const fetchFilteredDataFromAPI = async (filters: DataFilters): Promise<MonitorDa
         latency: item.latency !== undefined ? String(item.latency) : 'N/A', // Mapping 'avgDurationMs' to 'latency'
         status: item.status || 'Unknown', // Mapping 'status' from API to 'status'
         errorCodes: item.errorCodes || [], // Mapping the new errorCodes field
+        timeRanges: item.timeRanges || [], // Mapping the new timeRanges field
       }));
     } else if (response.data && typeof response.data === 'object' && Object.keys(response.data).length > 0) {
         // If your API returns a single object (not an array of objects)
@@ -213,6 +222,7 @@ const fetchFilteredDataFromAPI = async (filters: DataFilters): Promise<MonitorDa
             latency: item.latency !== undefined ? String(item.latency) : 'N/A',
             status: item.status || 'Unknown',
             errorCodes: item.errorCodes || [], // Mapping the new errorCodes field
+            timeRanges: item.timeRanges || [], // Mapping the new timeRanges field
         }];
     }
     // --- End of IMPORTANT section ---
@@ -737,7 +747,7 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
                       align="right"
                       sx={{
                         border: `2px solid ${getLatencyBorderColor(String(record.latency))}`,
-                        borderRadius: '8px',
+                        borderRadius: '8-px',
                       }}
                     >
                       {record.latency}
@@ -884,7 +894,6 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onSelectView, activeView, theme
   const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
   const navItems = [
     { id: 'table', text: 'Endpoint Table', icon: <TableChartIcon /> },
-    { id: 'error_trends', text: 'Error Trends', icon: <DeveloperBoardIcon /> },
     { id: 'error_bars', text: 'Error Bars', icon: <BarChartIcon />}, // Added new nav item
     { id: 'summary', text: 'Overall Summary', icon: <DashboardIcon /> },
     // Removed 'filtered_data' nav item
@@ -961,7 +970,7 @@ interface MiniTrendGraphProps {
   themeMode: 'light' | 'dark';
 }
 
-const MiniTrendGraph: React.FC<MiniTrendGraphProps> = ({ history, label, unit, color, appliedStartDate, appliedEndDate, themeMode }) => {
+const MiniTrendGraph: React.FC<MiniTrendTrendGraphProps> = ({ history, label, unit, color, appliedStartDate, appliedEndDate, themeMode }) => {
   const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
   const filteredHistory = useMemo(() => {
     if (!appliedStartDate || !appliedEndDate) {
@@ -1019,77 +1028,13 @@ const MiniTrendGraph: React.FC<MiniTrendGraphProps> = ({ history, label, unit, c
   );
 };
 
-interface ErrorRateTrendsProps {
-  monitorRecords: MonitorDataResult[]; // Changed to MonitorDataResult[]
-  themeMode: 'light' | 'dark';
-  appliedStartDate: Date | null; // Added for MiniTrendGraph filtering
-  appliedEndDate: Date | null;    // Added for MiniTrendGraph filtering
-}
-
-const ErrorRateTrends: React.FC<ErrorRateTrendsProps> = ({ monitorRecords, themeMode, appliedStartDate, appliedEndDate }) => {
-  const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
-
-  // Function to create a synthetic history for MiniTrendGraph
-  const createSyntheticHistory = (failureCount: number, timestamp: Date | null) => {
-    const ts = timestamp || new Date(); // Use appliedEndDate or current date if no end date
-    return [{ value: failureCount, timestamp: ts }];
-  };
-
-  return (
-    <Card>
-      <CardContent>
-        <Typography variant="h5" gutterBottom>
-          Error Count Trends Over Time
-        </Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 3 }}>
-          {monitorRecords.length === 0 ? (
-            <Typography variant="body2" color="textSecondary" sx={{ p: 2 }}>
-              No error data available for the selected filters.
-            </Typography>
-          ) : (
-            monitorRecords.map((record, index) => (
-              <Card key={record.projectName + record.server + index} variant="outlined" sx={{ borderRadius: 2 }}>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom sx={{ mb: 1 }}>
-                    {record.projectName}
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                    Server: {record.server}
-                  </Typography>
-                  {record.failureCount > 0 ? ( // Conditionally render MiniTrendGraph
-                    <MiniTrendGraph
-                      history={createSyntheticHistory(record.failureCount, appliedEndDate)} // Pass synthetic history
-                      label="Error Count" // Changed label for clarity
-                      unit="errors"
-                      color={currentTheme.palette.error.main}
-                      appliedStartDate={appliedStartDate}
-                      appliedEndDate={appliedEndDate}
-                      themeMode={themeMode}
-                    />
-                  ) : (
-                    <Box sx={{ width: '100%', height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', border: '1px dashed', borderColor: currentTheme.palette.grey[400], borderRadius: 2, p: 2 }}>
-                      <Typography variant="body2">No errors recorded.</Typography>
-                    </Box>
-                  )}
-                  <Typography variant="body2" component="span" sx={{ mt: 1 }}>
-                    Current Errors: <Chip label={`${record.failureCount} errors`} size="small" color={record.failureCount > 10 ? 'error' : record.failureCount > 3 ? 'warning' : 'success'} />
-                  </Typography>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </Box>
-      </CardContent>
-    </Card>
-  );
-};
-
 interface ErrorBarsProps {
   monitorRecords: MonitorDataResult[];
   themeMode: 'light' | 'dark';
+  loading: boolean;
 }
 
-const ErrorBars: React.FC<ErrorBarsProps> = ({ monitorRecords, themeMode }) => {
+const ErrorBars: React.FC<ErrorBarsProps> = ({ monitorRecords, themeMode, loading }) => {
   const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
 
   // Find the maximum error count across all records for scaling
@@ -1111,20 +1056,39 @@ const ErrorBars: React.FC<ErrorBarsProps> = ({ monitorRecords, themeMode }) => {
   const maxHeight = 100; // in pixels
 
   return (
-    <Card>
+    <Card sx={{ position: 'relative' }}>
       <CardContent>
         <Typography variant="h5" gutterBottom>
           Error Code Distribution
         </Typography>
+        {loading && ( // Conditional loading overlay
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              bgcolor: 'rgba(0, 0, 0, 0.5)', // Semi-transparent overlay
+              zIndex: 100, // Ensure it's on top
+              borderRadius: 2,
+            }}
+          >
+            <CircularProgress color="primary" />
+          </Box>
+        )}
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 3 }}>
-          {monitorRecords.length === 0 ? (
+          {monitorRecords.length === 0 && !loading ? (
             <Typography variant="body2" color="textSecondary" sx={{ p: 2 }}>
               No error data available for the selected filters.
             </Typography>
           ) : (
             monitorRecords.map((record, index) => (
               record.errorCodes && record.errorCodes.length > 0 && record.failureCount > 0 ? (
-                <Card key={record.projectName + record.server + index} variant="outlined" sx={{ borderRadius: 2 }}>
+                <Card key={String(record.projectName) + String(record.server) + String(index)} variant="outlined" sx={{ borderRadius: 2 }}>
                   <CardContent>
                     <Typography variant="h6" gutterBottom sx={{ mb: 1 }}>
                       {record.projectName}
@@ -1144,7 +1108,7 @@ const ErrorBars: React.FC<ErrorBarsProps> = ({ monitorRecords, themeMode }) => {
                       }}
                     >
                       {record.errorCodes.map((errorCode, codeIndex) => {
-                        const barHeight = (errorCode.count / maxErrorCount) * maxHeight;
+                        const barHeight = (errorCode.count > 0) ? Math.max((errorCode.count / maxErrorCount) * maxHeight, 5) : 0;
                         return (
                           <Tooltip
                             key={codeIndex}
@@ -1156,12 +1120,14 @@ const ErrorBars: React.FC<ErrorBarsProps> = ({ monitorRecords, themeMode }) => {
                                 flexDirection: 'column',
                                 alignItems: 'center',
                                 width: 30, // Fixed width for bars
-                                minHeight: 10, // Minimum height for visibility
                                 '&:hover .bar': {
                                   opacity: 0.8,
                                 },
                               }}
                             >
+                              <Typography variant="caption" sx={{ mb: 0.5 }}>
+                                {errorCode.count}
+                              </Typography>
                               <Box
                                 className="bar"
                                 sx={{
@@ -1553,56 +1519,14 @@ const App: React.FC = () => {
     setApiMonitorTableData([]); // Clear previous data immediately on apply click
 
     try {
-      // Hardcoded response to test the new ErrorBars component without a real API call.
-      // This simulates the data structure you provided.
-      const data: MonitorDataResult[] = [
-        {
-            projectName: "GET /v1/ADLOGIN",
-            server: "0",
-            totalCount: 9,
-            successCount: 7,
-            failureCount: 2,
-            latency: "1.41",
-            status: "Unhealthy",
-            errorCodes: [
-                { resultCode: "404", count: 1 },
-                { resultCode: "401", count: 1 }
-            ]
-        },
-        {
-          projectName: "GET /v1/AUTH",
-          server: "1",
-          totalCount: 15,
-          successCount: 12,
-          failureCount: 3,
-          latency: "2.12",
-          status: "Degraded",
-          errorCodes: [
-              { resultCode: "500", count: 2 },
-              { resultCode: "403", count: 1 }
-          ]
-        },
-        {
-          projectName: "POST /v1/DATA",
-          server: "2",
-          totalCount: 20,
-          successCount: 20,
-          failureCount: 0,
-          latency: "0.85",
-          status: "Healthy",
-          errorCodes: []
-        },
-      ];
+      const data = await fetchFilteredDataFromAPI({
+        project: projectFilter,
+        // Removed server: serverNameFilter,
+        startDate: newAppliedStartDate,
+        endDate: newAppliedEndDate,
+        timespan: timespanToSend, // Pass the derived timespan
+      });
       setApiMonitorTableData(data); // Use new data state
-      
-      // Original logic for real API call (commented out for this example):
-      // const data = await fetchFilteredDataFromAPI({
-      //   project: projectFilter,
-      //   startDate: newAppliedStartDate,
-      //   endDate: newAppliedEndDate,
-      //   timespan: timespanToSend,
-      // });
-      // setApiMonitorTableData(data);
     } catch (error) {
       setApiMonitorTableError(`Failed to fetch data: ${(error as Error).message}`); // Use new error state
     } finally {
@@ -1713,10 +1637,21 @@ const App: React.FC = () => {
     setShowLogoutConfirm(false);
   };
 
-  // Determine if date fields should be disabled
-  const isDateFieldsDisabled = !!selectedTimeRange;
-  // Determine if time range dropdown should be disabled
-  const isTimeRangeDisabled = !!startDateString || !!endDateString;
+  const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setStartDateString(e.target.value);
+    setSelectedTimeRange(''); // Clear time range
+  };
+
+  const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEndDateString(e.target.value);
+    setSelectedTimeRange(''); // Clear time range
+  };
+  
+  const handleTimeRangeChange = (e: any) => {
+    setSelectedTimeRange(e.target.value as string);
+    setStartDateString(''); // Clear start date
+    setEndDateString(''); // Clear end date
+  };
 
 
   if (loading) {
@@ -1763,7 +1698,7 @@ const App: React.FC = () => {
           )}
 
           {/* Conditional rendering of filter options */}
-          {(activeView === 'table' || activeView === 'summary' || activeView === 'error_trends' || activeView === 'error_bars') && (
+          {(activeView === 'table' || activeView === 'summary' || activeView === 'error_bars') && (
             <Box sx={{ display: 'flex', gap: 1, mb: 4, alignItems: 'center', flexWrap: 'wrap' }}>
               {/* Project Dropdown */}
               <FormControl sx={{ minWidth: 120 }}>
@@ -1818,15 +1753,7 @@ const App: React.FC = () => {
                   id="time-range-select"
                   value={selectedTimeRange}
                   label="Time Range"
-                  onChange={(e) => {
-                    setSelectedTimeRange(e.target.value as string);
-                    // Clear date fields if time range is selected
-                    if (e.target.value) {
-                      setStartDateString('');
-                      setEndDateString('');
-                    }
-                  }}
-                  disabled={isTimeRangeDisabled} // Disable if date fields have values
+                  onChange={handleTimeRangeChange}
                   sx={{ borderRadius: 2 }}
                 >
                   <MenuItem value="">
@@ -1848,40 +1775,26 @@ const App: React.FC = () => {
                 label="From Date"
                 type="datetime-local" // Changed type to datetime-local
                 value={startDateString}
-                onChange={(e) => {
-                  setStartDateString(e.target.value);
-                  // Clear time range if date field is used
-                  if (e.target.value) {
-                    setSelectedTimeRange('');
-                  }
-                }}
+                onChange={handleStartDateChange}
                 InputLabelProps={{ shrink: true }}
                 inputProps={{
                   id: 'startDateInput',
                   min: minDateString, // Set the minimum date
                   max: maxDateString, // Set the maximum date (today)
                 }}
-                disabled={isDateFieldsDisabled} // Disable if time range is selected
               />
               {/* End Date */}
               <TextField
                 label="To Date"
                 type="datetime-local" // Changed type to datetime-local
                 value={endDateString}
-                onChange={(e) => {
-                  setEndDateString(e.target.value);
-                  // Clear time range if date field is used
-                  if (e.target.value) {
-                    setSelectedTimeRange('');
-                  }
-                }}
+                onChange={handleEndDateChange}
                 InputLabelProps={{ shrink: true }}
                 inputProps={{
                   id: 'endDateInput',
                   min: minDateString, // Set the minimum date
                   max: maxDateString, // Set the maximum date (today)
                 }}
-                disabled={isDateFieldsDisabled} // Disable if time range is selected
               />
               <Button
                 variant="contained"
@@ -1931,24 +1844,16 @@ const App: React.FC = () => {
               loading={apiMonitorTableLoading} // Pass loading state to the table
             />
           )}
-
-          {activeView === 'error_trends' && (
-            <ErrorRateTrends
-              monitorRecords={apiMonitorTableData} // Pass monitorRecords to ErrorRateTrends
-              themeMode={themeMode}
-              appliedStartDate={appliedStartDate}
-              appliedEndDate={appliedEndDate}
-            />
-          )}
           
           {activeView === 'error_bars' && (
             <ErrorBars 
               monitorRecords={apiMonitorTableData}
               themeMode={themeMode}
+              loading={apiMonitorTableLoading}
             />
           )}
 
-          {/* Removed FilteredDataDisplay component rendering */}
+          {/* Removed ErrorRateTrends component rendering */}
 
           {activeView === 'notifications' && <NotificationAlerting />}
           {activeView === 'selfHealing' && <AutomatedSelfHealingActions />}
