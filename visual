@@ -2011,24 +2011,32 @@ const App: React.FC = () => {
 
 
   const handleClearFilters = () => {
-    // Clear API-related filters
+    // Clear ALL filters (API-level and column-level)
     setStartDateString("");
     setEndDateString("");
     setAppliedStartDate(null);
     setAppliedEndDate(null);
     setProjectFilter("");
     setSelectedTimeRange("");
-
-    // Clear column-based filters
     setFilterColumn("");
     setFilterText("");
 
-    // Reset displayed data to the last fetched API data
-    setDisplayedTableData(apiMonitorTableData); // THIS IS THE KEY CHANGE
+    // Clear all data
+    setApiMonitorTableData([]);
+    setDisplayedTableData([]);
 
     // Clear loading/error states
     setApiMonitorTableError(null);
     setApiMonitorTableLoading(false);
+  };
+
+  const handleClearColumnFilters = () => {
+    // Clear only column-based filters
+    setFilterColumn("");
+    setFilterText("");
+
+    // Revert displayed data to the last fetched API data (unfiltered by column)
+    setDisplayedTableData(apiMonitorTableData);
   };
 
   const handleDownloadExcel = () => {
@@ -2340,10 +2348,18 @@ const App: React.FC = () => {
 
               <Button
                 variant="outlined"
+                onClick={handleClearColumnFilters} // New button for clearing only column filters
+                sx={{ height: "40px", px: 2, borderRadius: 2 }}
+              >
+                Clear Column Filters
+              </Button>
+
+              <Button
+                variant="outlined"
                 onClick={handleClearFilters}
                 sx={{ height: "40px", px: 2, borderRadius: 2 }}
               >
-                Clear
+                Clear All
               </Button>
               <Button
                 variant="outlined"
