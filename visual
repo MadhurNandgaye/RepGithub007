@@ -589,10 +589,10 @@ const EndpointTrendChart: React.FC<EndpointTrendChartProps> = ({ timeRanges, the
     );
   }
 
-  // Format time for XAxis ticks
+  // Format time for XAxis ticks: Extract HH:MM from the ISO string (UTC time)
   const formattedData = timeRanges.map(dataPoint => ({
     ...dataPoint,
-    time: new Date(dataPoint.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    displayTime: dataPoint.time ? dataPoint.time.substring(11, 16) : '', // "HH:MM" from "YYYY-MM-DDTHH:MM:SS.sssZ"
   }));
 
   return (
@@ -602,12 +602,19 @@ const EndpointTrendChart: React.FC<EndpointTrendChartProps> = ({ timeRanges, the
         margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
       >
         <CartesianGrid strokeDasharray="3 3" stroke={currentTheme.palette.divider} />
-        <XAxis dataKey="time" stroke={currentTheme.palette.text.secondary} />
+        <XAxis dataKey="displayTime" stroke={currentTheme.palette.text.secondary} />
         <YAxis stroke={currentTheme.palette.text.secondary} />
         <RechartsTooltip
           contentStyle={{ backgroundColor: currentTheme.palette.background.paper, border: `1px solid ${currentTheme.palette.divider}` }}
           labelStyle={{ color: currentTheme.palette.text.primary }}
           itemStyle={{ color: currentTheme.palette.text.secondary }}
+          // Custom tooltip formatter to show full date and time from original 'time' field
+          formatter={(value, name, props) => {
+            if (props.payload && props.payload.time) {
+              return [value, `${name} (${new Date(props.payload.time).toLocaleString()})`];
+            }
+            return [value, name];
+          }}
         />
         <Line type="monotone" dataKey="successCount" stroke={currentTheme.palette.success.main} activeDot={{ r: 8 }} name="Success Count" />
         <Line type="monotone" dataKey="failureCount" stroke={currentTheme.palette.error.main} activeDot={{ r: 8 }} name="Failure Count" />
@@ -814,7 +821,7 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
                           align="right"
                           sx={{
                             border: `2px solid ${getLatencyBorderColor(String(record.latency))}`,
-                            borderRadius: '8-px',
+                            borderRadius: '8px',
                           }}
                         >
                           {record.latency}
