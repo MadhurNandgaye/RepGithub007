@@ -227,8 +227,8 @@ const fetchFilteredDataFromAPI = async (
           item.failureCount !== undefined ? Number(item.failureCount) : 0,
         latency: item.latency !== undefined ? String(item.latency) : "N/A", // Mapping 'avgDurationMs' to 'latency'
         status: item.status || "Unknown", // Mapping 'status' from API to 'status'
-        errorCodes: item.errorCodes || [], // Mapping the new errorCodes field
-        timeRanges: item.timeRanges || [], // Mapping the new timeRanges field
+        errorCodes: item.errorCodes || [], // New field to match the provided data structure
+        timeRanges: item.timeRanges || [], // New field for time-series data
       }));
     } else if (
       response.data &&
@@ -2009,16 +2009,22 @@ const App: React.FC = () => {
 
 
   const handleClearFilters = () => {
+    // Clear API-related filters
     setStartDateString("");
     setEndDateString("");
     setAppliedStartDate(null);
     setAppliedEndDate(null);
-    setProjectFilter(""); // Clear project filter
+    setProjectFilter("");
     setSelectedTimeRange("");
-    setFilterColumn(""); // Clear new column filter
-    setFilterText(""); // Clear new text filter
-    setApiMonitorTableData([]); // Clear raw API data
-    setDisplayedTableData([]); // Clear displayed data
+
+    // Clear column-based filters
+    setFilterColumn("");
+    setFilterText("");
+
+    // Reset displayed data to the last fetched API data
+    setDisplayedTableData(apiMonitorTableData); // THIS IS THE KEY CHANGE
+
+    // Clear loading/error states
     setApiMonitorTableError(null);
     setApiMonitorTableLoading(false);
   };
