@@ -970,63 +970,7 @@ interface MiniTrendGraphProps {
   themeMode: 'light' | 'dark';
 }
 
-const MiniTrendGraph: React.FC<MiniTrendTrendGraphProps> = ({ history, label, unit, color, appliedStartDate, appliedEndDate, themeMode }) => {
-  const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
-  const filteredHistory = useMemo(() => {
-    if (!appliedStartDate || !appliedEndDate) {
-      return history;
-    }
-    const start = appliedStartDate;
-    const end = appliedEndDate;
-
-    return history.filter(point =>
-      point.timestamp.getTime() >= start.getTime() &&
-      point.timestamp.getTime() <= end.getTime()
-    );
-  }, [history, appliedStartDate, appliedEndDate]);
-
-  if (filteredHistory.length === 0) {
-    return (
-      <Box sx={{ width: '100%', height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', border: '1px dashed', borderColor: currentTheme.palette.grey[400], borderRadius: 2, p: 2 }}>
-        <Typography variant="body2">No data available for selected date.</Typography>
-      </Box>
-    );
-  }
-
-  const chartData = filteredHistory.map(point => ({
-    value: point.value,
-    date: point.timestamp.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-    fullDate: point.timestamp.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-  }));
-
-  return (
-    <Box sx={{ width: '100%', height: 100 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
-          <defs>
-            <linearGradient id={`color${label}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={color} stopOpacity={0.8}/>
-              <stop offset="95%" stopColor={currentTheme.palette.grey[300]} stopOpacity={0}/>
-            </linearGradient>
-          </defs>
-          <RechartsTooltip
-            labelFormatter={(labelValue, payload) => {
-              if (payload && payload.length > 0 && payload[0].payload && payload[0].payload.fullDate) {
-                return `Date: ${payload[0].payload.fullDate}`;
-              }
-              return `Date: ${labelValue}`;
-            }}
-            formatter={(value) => [`${value} ${unit}`, label]}
-            contentStyle={{ backgroundColor: currentTheme.palette.background.paper, border: `1px solid ${currentTheme.palette.divider}` }}
-            labelStyle={{ color: currentTheme.palette.text.primary }}
-            itemStyle={{ color: currentTheme.palette.text.secondary }}
-          />
-          <Area type="monotone" dataKey="value" stroke={color} fillOpacity={1} fill={`url(#color${label})`} strokeWidth={2} dot={false} />
-        </AreaChart>
-      </ResponsiveContainer>
-    </Box>
-  );
-};
+/* Removed MiniTrendGraph component as it is not used anywhere in the code to resolve the unused variable error. */
 
 interface ErrorBarsProps {
   monitorRecords: MonitorDataResult[];
