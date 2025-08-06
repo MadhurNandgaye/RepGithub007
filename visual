@@ -590,10 +590,15 @@ const EndpointTrendChart: React.FC<EndpointTrendChartProps> = ({ timeRanges, the
   }
 
   // Format time for XAxis ticks: Extract HH:MM from the ISO string (UTC time)
-  const formattedData = timeRanges.map(dataPoint => ({
-    ...dataPoint,
-    displayTime: dataPoint.time ? dataPoint.time.substring(11, 16) : '', // "HH:MM" from "YYYY-MM-DDTHH:MM:SS.sssZ"
-  }));
+  const formattedData = timeRanges.map(dataPoint => {
+    const dateObj = new Date(dataPoint.time);
+    // Format to "DD/MM HH:MM:SS"
+    const formattedDateTime = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')} ${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}:${String(dateObj.getSeconds()).padStart(2, '0')}`;
+    return {
+      ...dataPoint,
+      displayTime: formattedDateTime,
+    };
+  });
 
   return (
     <ResponsiveContainer width="100%" height={200}>
@@ -602,7 +607,14 @@ const EndpointTrendChart: React.FC<EndpointTrendChartProps> = ({ timeRanges, the
         margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
       >
         <CartesianGrid strokeDasharray="3 3" stroke={currentTheme.palette.divider} />
-        <XAxis dataKey="displayTime" stroke={currentTheme.palette.text.secondary} />
+        <XAxis
+          dataKey="displayTime"
+          stroke={currentTheme.palette.text.secondary}
+          angle={-45} // Rotate labels diagonally
+          textAnchor="end" // Anchor text to the end for better alignment with rotation
+          interval="preserveStartEnd" // Helps prevent overlapping labels
+          height={60} // Provide more height for rotated labels
+        />
         <YAxis stroke={currentTheme.palette.text.secondary} />
         <RechartsTooltip
           contentStyle={{ backgroundColor: currentTheme.palette.background.paper, border: `1px solid ${currentTheme.palette.divider}` }}
@@ -675,7 +687,7 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
         return 'rgba(76, 175, 80, 0.6)'; // Green with higher transparency
       case 'degraded':
         return 'rgba(255, 152, 0, 0.6)'; // Orange with higher transparency
-      case 'critical':
+      case 'unhealthy':
         return 'rgba(244, 67, 54, 0.6)'; // Red with higher transparency
       default:
         return 'rgba(158, 158, 158, 0.3)'; // Grey with higher transparency for unknown
@@ -711,136 +723,40 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
           )}
           <Table stickyHeader aria-label="api monitor data table">
             {/* Adjusted TableHead formatting to prevent whitespace issues */}
-            <TableHead>
-              <TableRow>
+            <TableHead><TableRow>
                 <TableCell /> {/* Empty cell for expand icon */}
-                <TableCell sortDirection={orderBy === 'projectName' ? order : false}>
-                  <TableSortLabel
-                    active={orderBy === 'projectName'}
-                    direction={orderBy === 'projectName' ? order : 'asc'}
-                    onClick={(event) => handleRequestSort(event, 'projectName')}
-                  >
-                    Project Name
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sortDirection={orderBy === 'server' ? order : false}>
-                  <TableSortLabel
-                    active={orderBy === 'server'}
-                    direction={orderBy === 'server' ? order : 'asc'}
-                    onClick={(event) => handleRequestSort(event, 'server')}
-                  >
-                    Server
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align="right" sortDirection={orderBy === 'status' ? order : false}>
-                  <TableSortLabel
-                    active={orderBy === 'status'}
-                    direction={orderBy === 'status' ? order : 'asc'}
-                    onClick={(event) => handleRequestSort(event, 'status')}
-                  >
-                    Status
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align="right" sortDirection={orderBy === 'totalCount' ? order : false}>
-                  <TableSortLabel
-                    active={orderBy === 'totalCount'}
-                    direction={orderBy === 'totalCount' ? order : 'asc'}
-                    onClick={(event) => handleRequestSort(event, 'totalCount')}
-                  >
-                    Total Count
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align="right" sortDirection={orderBy === 'successCount' ? order : false}>
-                  <TableSortLabel
-                    active={orderBy === 'successCount'}
-                    direction={orderBy === 'successCount' ? order : 'asc'}
-                    onClick={(event) => handleRequestSort(event, 'successCount')}
-                  >
-                    Success Count
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align="right" sortDirection={orderBy === 'failureCount' ? order : false}>
-                  <TableSortLabel
-                    active={orderBy === 'failureCount'}
-                    direction={orderBy === 'failureCount' ? order : 'asc'}
-                    onClick={(event) => handleRequestSort(event, 'failureCount')}
-                  >
-                    Failure Count
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align="right" sortDirection={orderBy === 'latency' ? order : false}>
-                  <TableSortLabel
-                    active={orderBy === 'latency'}
-                    direction={orderBy === 'latency' ? order : 'asc'}
-                    onClick={(event) => handleRequestSort(event, 'latency')}
-                  >
-                    Latency
-                  </TableSortLabel>
-                </TableCell>
-              </TableRow>
-            </TableHead>
+                <TableCell sortDirection={orderBy === 'projectName' ? order : false}><TableSortLabel active={orderBy === 'projectName'} direction={orderBy === 'projectName' ? order : 'asc'} onClick={(event) => handleRequestSort(event, 'projectName')}>Project Name</TableSortLabel></TableCell>
+                <TableCell sortDirection={orderBy === 'server' ? order : false}><TableSortLabel active={orderBy === 'server'} direction={orderBy === 'server' ? order : 'asc'} onClick={(event) => handleRequestSort(event, 'server')}>Server</TableSortLabel></TableCell>
+                <TableCell align="right" sortDirection={orderBy === 'status' ? order : false}><TableSortLabel active={orderBy === 'status'} direction={orderBy === 'status' ? order : 'asc'} onClick={(event) => handleRequestSort(event, 'status')}>Status</TableSortLabel></TableCell>
+                <TableCell align="right" sortDirection={orderBy === 'totalCount' ? order : false}><TableSortLabel active={orderBy === 'totalCount'} direction={orderBy === 'totalCount' ? order : 'asc'} onClick={(event) => handleRequestSort(event, 'totalCount')}>Total Count</TableSortLabel></TableCell>
+                <TableCell align="right" sortDirection={orderBy === 'successCount' ? order : false}><TableSortLabel active={orderBy === 'successCount'} direction={orderBy === 'successCount' ? order : 'asc'} onClick={(event) => handleRequestSort(event, 'successCount')}>Success Count</TableSortLabel></TableCell>
+                <TableCell align="right" sortDirection={orderBy === 'failureCount' ? order : false}><TableSortLabel active={orderBy === 'failureCount'} direction={orderBy === 'failureCount' ? order : 'asc'} onClick={(event) => handleRequestSort(event, 'failureCount')}>Failure Count</TableSortLabel></TableCell>
+                <TableCell align="right" sortDirection={orderBy === 'latency' ? order : false}><TableSortLabel active={orderBy === 'latency'} direction={orderBy === 'latency' ? order : 'asc'} onClick={(event) => handleRequestSort(event, 'latency')}>Latency</TableSortLabel></TableCell>
+              </TableRow></TableHead>
             <TableBody>
-              {sortedRecords.length === 0 && !loading ? ( // Only show "No records" if not loading
-                <TableRow>
-                  <TableCell colSpan={8} align="center"> {/* Adjusted colspan */}
-                    No API records found for the selected filters.
-                  </TableCell>
-                </TableRow>
+              {sortedRecords.length === 0 && !loading ? (
+                <TableRow><TableCell colSpan={8} align="center">No API records found for the selected filters.</TableCell></TableRow>
               ) : (
                 sortedRecords.map((record, index) => {
                   const rowKey = String(record.projectName) + String(record.server) + String(index);
                   const isExpanded = expandedRow === rowKey;
-                  return (
-                    <React.Fragment key={rowKey}>
-                      <TableRow>
-                        <TableCell>
-                          <IconButton
-                            aria-label="expand row"
-                            size="small"
-                            onClick={() => handleExpandClick(rowKey)}
-                          >
-                            {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                          </IconButton>
-                        </TableCell>
-                        <TableCell>{record.projectName}</TableCell>
-                        <TableCell>{record.server}</TableCell>
-                        <TableCell
-                          sx={{
-                            backgroundColor: getStatusBackgroundColor(String(record.status)),
-                            borderRadius: '8px',
-                            // Add a subtle border for separation
-                            border: `1px solid ${themeMode === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)'}`,
-                          }}
-                        >
-                          {record.status}
-                        </TableCell>
-                        <TableCell align="right">{record.totalCount}</TableCell>
-                        <TableCell align="right">{record.successCount}</TableCell>
-                        <TableCell align="right">{record.failureCount}</TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{
-                            border: `2px solid ${getLatencyBorderColor(String(record.latency))}`,
-                            borderRadius: '8px',
-                          }}
-                        >
-                          {record.latency}
-                        </TableCell>
+                  return [
+                    <TableRow key={rowKey}>
+                      <TableCell><IconButton aria-label="expand row" size="small" onClick={() => handleExpandClick(rowKey)}>{isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}</IconButton></TableCell>
+                      <TableCell>{record.projectName}</TableCell>
+                      <TableCell>{record.server}</TableCell>
+                      <TableCell sx={{ backgroundColor: getStatusBackgroundColor(String(record.status)), borderRadius: '8px', border: `1px solid ${themeMode === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)'}`}}>{record.status}</TableCell>
+                      <TableCell align="right">{record.totalCount}</TableCell>
+                      <TableCell align="right">{record.successCount}</TableCell>
+                      <TableCell align="right">{record.failureCount}</TableCell>
+                      <TableCell align="right" sx={{ border: `2px solid ${getLatencyBorderColor(String(record.latency))}`, borderRadius: '8px',}}>{record.latency}</TableCell>
+                    </TableRow>,
+                    isExpanded && (
+                      <TableRow key={rowKey + '-expanded'}>
+                        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}><Box sx={{ margin: 1 }}><Typography variant="h6" gutterBottom component="div">Performance Trend</Typography><EndpointTrendChart timeRanges={record.timeRanges || []} themeMode={themeMode} /></Box></TableCell>
                       </TableRow>
-                      {isExpanded && (
-                        <TableRow>
-                          <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}>
-                            <Box sx={{ margin: 1 }}>
-                              <Typography variant="h6" gutterBottom component="div">
-                                Performance Trend
-                              </Typography>
-                              <EndpointTrendChart timeRanges={record.timeRanges || []} themeMode={themeMode} />
-                            </Box>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </React.Fragment>
-                  );
+                    )
+                  ];
                 })
               )}
             </TableBody>
@@ -934,35 +850,13 @@ const UserProfileTable: React.FC = () => (
       <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
         <Table aria-label="user profile table">
           <TableBody>
-            {/* Corrected formatting to avoid whitespace text nodes */}
-            <TableRow>
-              <TableCell component="th" scope="row" sx={{ fontWeight: 'bold', width: '30%' }}>User ID</TableCell>
-              <TableCell>{loggedInUser.id}</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Name</TableCell>
-              <TableCell>{loggedInUser.name}</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Email</TableCell>
-              <TableCell>{loggedInUser.email}</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Role</TableCell>
-              <TableCell>{loggedInUser.role}</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Department</TableCell>
-              <TableCell>{loggedInUser.department}</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Contact</TableCell>
-              <TableCell>{loggedInUser.contact}</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Last Login</TableCell>
-              <TableCell>{loggedInUser.lastLogin.toLocaleString()}</TableCell>
-            </TableRow>
+              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold', width: '30%' }}>User ID</TableCell><TableCell>{loggedInUser.id}</TableCell></TableRow>
+              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Name</TableCell><TableCell>{loggedInUser.name}</TableCell></TableRow>
+              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Email</TableCell><TableCell>{loggedInUser.email}</TableCell></TableRow>
+              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Role</TableCell><TableCell>{loggedInUser.role}</TableCell></TableRow>
+              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Department</TableCell><TableCell>{loggedInUser.department}</TableCell></TableRow>
+              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Contact</TableCell><TableCell>{loggedInUser.contact}</TableCell></TableRow>
+              <TableRow><TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>Last Login</TableCell><TableCell>{loggedInUser.lastLogin.toLocaleString()}</TableCell></TableRow>
           </TableBody>
         </Table>
       </TableContainer>
