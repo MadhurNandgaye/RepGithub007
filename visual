@@ -1801,28 +1801,30 @@ const App: React.FC = () => {
     initializeDashboardData();
   }, []);
 
-  const totalEndpoints = endpoints.length;
-  const healthyEndpoints = endpoints.filter(
-    (e) => e.internalHealth === "Green" && e.externalHealth === "Green"
+  // Calculate overall summary based on apiMonitorTableData
+  const totalEndpointsSummary = apiMonitorTableData.length;
+  const healthyEndpointsSummary = apiMonitorTableData.filter(
+    (e) => e.status.toLowerCase() === 'healthy'
   ).length;
-  const yellowEndpoints = endpoints.filter(
-    (e) => e.internalHealth === "Yellow" || e.externalHealth === "Yellow"
+  const yellowEndpointsSummary = apiMonitorTableData.filter(
+    (e) => e.status.toLowerCase() === 'degraded'
   ).length;
-  const redEndpoints = endpoints.filter(
-    (e) => e.internalHealth === "Red" || e.externalHealth === "Red"
+  const redEndpointsSummary = apiMonitorTableData.filter(
+    (e) => e.status.toLowerCase() === 'unhealthy'
   ).length;
 
-  const overallStatus = useMemo(() => {
-    if (redEndpoints > 0) {
-      return "Critical";
-    } else if (yellowEndpoints > 0) {
-      return "Degraded";
-    } else if (healthyEndpoints === totalEndpoints && totalEndpoints > 0) {
-      return "Operational";
+  const overallStatusSummary = useMemo(() => {
+    if (redEndpointsSummary > 0) {
+      return 'Critical';
+    } else if (yellowEndpointsSummary > 0) {
+      return 'Degraded';
+    } else if (healthyEndpointsSummary === totalEndpointsSummary && totalEndpointsSummary > 0) {
+      return 'Operational';
     } else {
-      return "Unknown";
+      return 'Unknown';
     }
-  }, [healthyEndpoints, yellowEndpoints, redEndpoints, totalEndpoints]);
+  }, [healthyEndpointsSummary, yellowEndpointsSummary, redEndpointsSummary, totalEndpointsSummary]);
+
 
   const getStatusProps = useCallback(
     (health: "Red" | "Yellow" | "Green" | "Unknown") => {
@@ -2075,31 +2077,8 @@ const App: React.FC = () => {
     }
   };
 
-  const filteredEndpointsByProject = useMemo(() => {
-    if (!projectFilter) {
-      return endpoints;
-    }
-    return endpoints.filter(
-      (endpoint) => endpoint.projectName === projectFilter
-    );
-  }, [endpoints, projectFilter]);
-
-  // Removed filteredEndpointsByServer memo
-  const displayEndpoints = useMemo(() => {
-    let currentEndpoints = filteredEndpointsByProject; // Now directly use filteredEndpointsByProject
-
-    if (appliedStartDate && appliedEndDate) {
-      currentEndpoints = currentEndpoints.filter(
-        (endpoint) =>
-          endpoint.lastChecked &&
-          new Date(endpoint.lastChecked).getTime() >=
-            appliedStartDate.getTime() &&
-          new Date(endpoint.lastChecked).getTime() <= appliedEndDate.getTime()
-      );
-    }
-    return currentEndpoints;
-  }, [filteredEndpointsByProject, appliedStartDate, appliedEndDate]);
-
+  // Removed filteredEndpointsByProject and displayEndpoints as they are no longer directly used by OverallSummaryStatus
+  // and their logic is now handled by apiMonitorTableData and displayedTableData for the table/charts.
 
   const toggleTheme = () => {
     setThemeMode((prevMode) => (prevMode === "light" ? "dark" : "light"));
@@ -2378,27 +2357,11 @@ const App: React.FC = () => {
 
           {activeView === "summary" && (
             <OverallSummaryStatus
-              totalEndpoints={displayEndpoints.length}
-              healthyEndpoints={
-                displayEndpoints.filter(
-                  (e) =>
-                    e.internalHealth === "Green" && e.externalHealth === "Green"
-                ).length
-              }
-              yellowEndpoints={
-                displayEndpoints.filter(
-                  (e) =>
-                    e.internalHealth === "Yellow" ||
-                    e.externalHealth === "Yellow"
-                ).length
-              }
-              redEndpoints={
-                displayEndpoints.filter(
-                  (e) =>
-                    e.internalHealth === "Red" || e.externalHealth === "Red"
-                ).length
-              }
-              overallStatus={overallStatus}
+              totalEndpoints={totalEndpointsSummary}
+              healthyEndpoints={healthyEndpointsSummary}
+              yellowEndpoints={yellowEndpointsSummary}
+              redEndpoints={redEndpointsSummary}
+              overallStatus={overallStatusSummary}
             />
           )}
 
