@@ -58,7 +58,8 @@ import PersonIcon from '@mui/icons-material/Person';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import { Brightness4 as Brightness4Icon, Brightness7 as Brightness7Icon } from '@mui/icons-material';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-// No longer importing FilterListIcon as the "Filtered Data" view has been removed
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'; // Import expand icons
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
 
 import {
@@ -68,6 +69,9 @@ import {
   Tooltip as RechartsTooltip,
   XAxis,
   YAxis,
+  LineChart, // Import LineChart
+  Line,      // Import Line
+  CartesianGrid, // Import CartesianGrid for grid lines
 } from 'recharts';
 import { blueGrey } from '@mui/material/colors';
 
@@ -569,6 +573,50 @@ function stableSort<T>(array: readonly T[], comparator: (a: T, b: T) => number) 
 }
 
 
+interface EndpointTrendChartProps {
+  timeRanges: TimeRangeData[];
+  themeMode: 'light' | 'dark';
+}
+
+const EndpointTrendChart: React.FC<EndpointTrendChartProps> = ({ timeRanges, themeMode }) => {
+  const currentTheme = themeMode === 'light' ? lightTheme : darkTheme;
+
+  if (!timeRanges || timeRanges.length === 0) {
+    return (
+      <Box sx={{ width: '100%', height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', border: '1px dashed', borderColor: currentTheme.palette.divider, borderRadius: 2, p: 2 }}>
+        <Typography variant="body2">No time series data available for this endpoint.</Typography>
+      </Box>
+    );
+  }
+
+  // Format time for XAxis ticks
+  const formattedData = timeRanges.map(dataPoint => ({
+    ...dataPoint,
+    time: new Date(dataPoint.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  }));
+
+  return (
+    <ResponsiveContainer width="100%" height={200}>
+      <LineChart
+        data={formattedData}
+        margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" stroke={currentTheme.palette.divider} />
+        <XAxis dataKey="time" stroke={currentTheme.palette.text.secondary} />
+        <YAxis stroke={currentTheme.palette.text.secondary} />
+        <RechartsTooltip
+          contentStyle={{ backgroundColor: currentTheme.palette.background.paper, border: `1px solid ${currentTheme.palette.divider}` }}
+          labelStyle={{ color: currentTheme.palette.text.primary }}
+          itemStyle={{ color: currentTheme.palette.text.secondary }}
+        />
+        <Line type="monotone" dataKey="successCount" stroke={currentTheme.palette.success.main} activeDot={{ r: 8 }} name="Success Count" />
+        <Line type="monotone" dataKey="failureCount" stroke={currentTheme.palette.error.main} activeDot={{ r: 8 }} name="Failure Count" />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+};
+
+
 interface ApiMonitorDataTableProps {
   monitorRecords: MonitorDataResult[];
   themeMode: 'light' | 'dark';
@@ -578,6 +626,7 @@ interface ApiMonitorDataTableProps {
 const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecords, themeMode, loading }) => {
   const [order, setOrder] = useState<Order>('asc');
   const [orderBy, setOrderBy] = useState<keyof MonitorDataResult>('projectName');
+  const [expandedRow, setExpandedRow] = useState<string | null>(null); // State to manage expanded row
 
   const handleRequestSort = (
     event: React.MouseEvent<unknown>,
@@ -586,6 +635,10 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
     const isAsc = orderBy === property && order === 'asc';
     setOrder(isAsc ? 'desc' : 'asc');
     setOrderBy(property);
+  };
+
+  const handleExpandClick = (rowKey: string) => {
+    setExpandedRow(expandedRow === rowKey ? null : rowKey);
   };
 
   const sortedRecords = useMemo(() => {
@@ -653,6 +706,7 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
             {/* Adjusted TableHead formatting to prevent whitespace issues */}
             <TableHead>
               <TableRow>
+                <TableCell /> {/* Empty cell for expand icon */}
                 <TableCell sortDirection={orderBy === 'projectName' ? order : false}>
                   <TableSortLabel
                     active={orderBy === 'projectName'}
@@ -721,39 +775,66 @@ const ApiMonitorDataTable: React.FC<ApiMonitorDataTableProps> = ({ monitorRecord
             <TableBody>
               {sortedRecords.length === 0 && !loading ? ( // Only show "No records" if not loading
                 <TableRow>
-                  <TableCell colSpan={7} align="center">
+                  <TableCell colSpan={8} align="center"> {/* Adjusted colspan */}
                     No API records found for the selected filters.
                   </TableCell>
                 </TableRow>
               ) : (
-                sortedRecords.map((record, index) => (
-                  <TableRow key={String(record.projectName) + String(record.server) + String(index)}>
-                    <TableCell>{record.projectName}</TableCell>
-                    <TableCell>{record.server}</TableCell>
-                    <TableCell
-                      sx={{
-                        backgroundColor: getStatusBackgroundColor(String(record.status)),
-                        borderRadius: '8px',
-                        // Add a subtle border for separation
-                        border: `1px solid ${themeMode === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)'}`,
-                      }}
-                    >
-                      {record.status}
-                    </TableCell>
-                    <TableCell align="right">{record.totalCount}</TableCell>
-                    <TableCell align="right">{record.successCount}</TableCell>
-                    <TableCell align="right">{record.failureCount}</TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        border: `2px solid ${getLatencyBorderColor(String(record.latency))}`,
-                        borderRadius: '8-px',
-                      }}
-                    >
-                      {record.latency}
-                    </TableCell>
-                  </TableRow>
-                ))
+                sortedRecords.map((record, index) => {
+                  const rowKey = String(record.projectName) + String(record.server) + String(index);
+                  const isExpanded = expandedRow === rowKey;
+                  return (
+                    <React.Fragment key={rowKey}>
+                      <TableRow>
+                        <TableCell>
+                          <IconButton
+                            aria-label="expand row"
+                            size="small"
+                            onClick={() => handleExpandClick(rowKey)}
+                          >
+                            {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                          </IconButton>
+                        </TableCell>
+                        <TableCell>{record.projectName}</TableCell>
+                        <TableCell>{record.server}</TableCell>
+                        <TableCell
+                          sx={{
+                            backgroundColor: getStatusBackgroundColor(String(record.status)),
+                            borderRadius: '8px',
+                            // Add a subtle border for separation
+                            border: `1px solid ${themeMode === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)'}`,
+                          }}
+                        >
+                          {record.status}
+                        </TableCell>
+                        <TableCell align="right">{record.totalCount}</TableCell>
+                        <TableCell align="right">{record.successCount}</TableCell>
+                        <TableCell align="right">{record.failureCount}</TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{
+                            border: `2px solid ${getLatencyBorderColor(String(record.latency))}`,
+                            borderRadius: '8-px',
+                          }}
+                        >
+                          {record.latency}
+                        </TableCell>
+                      </TableRow>
+                      {isExpanded && (
+                        <TableRow>
+                          <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}>
+                            <Box sx={{ margin: 1 }}>
+                              <Typography variant="h6" gutterBottom component="div">
+                                Performance Trend
+                              </Typography>
+                              <EndpointTrendChart timeRanges={record.timeRanges || []} themeMode={themeMode} />
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  );
+                })
               )}
             </TableBody>
           </Table>
