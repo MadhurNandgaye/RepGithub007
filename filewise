@@ -1,70 +1,44 @@
-public async Task MonitorWorkersAsync(
-    IWorkerRepository workerRepository,
-    ILogger logger,
-    IEmailService emailService,
-    int lookbackHours,
-    double thresholdPercent)
+public void TriggerEmailAlertForWorkerDrop(IEnumerable<WorkerCountResult> workersWithDrop, int percentageDrop)
 {
     try
     {
-        var end = DateTime.UtcNow;
-        var startRecent = end.AddHours(-lookbackHours);
-        var startHistorical = end.AddHours(-(lookbackHours * 2));
+        // Subject for the email
+        string subject = $"Worker Drop Alert - {percentageDrop}% decrease detected";
 
-        // Get counts
-        var recentCounts = await workerRepository.GetUniqueWorkerCountsAsync(startRecent, end);
-        var historicalCounts = await workerRepository.GetUniqueWorkerCountsAsync(startHistorical, startRecent);
+        // Build the email body in one go (HTML format)
+        string emailBody = "<html><body>";
+        emailBody += $"<p>Alert: We detected more than {percentageDrop}% decrease in workers.</p>";
+        emailBody += $"<p>Time: {DateTime.UtcNow}</p>";
+        emailBody += "<table border=\"1\" style=\"border-collapse:collapse;\">";
+        emailBody += "<tr><th>Worker Type</th><th>Previous Count</th><th>Current Count</th><th>Drop (%)</th></tr>";
 
-        foreach (var workerType in historicalCounts.Keys)
+        foreach (var worker in workersWithDrop)
         {
-            if (recentCounts.TryGetValue(workerType, out var recentCount))
-            {
-                var historicalCount = historicalCounts[workerType];
-                if (historicalCount == 0) continue;
-
-                var dropPercent = ((double)(historicalCount - recentCount) / historicalCount) * 100;
-
-                if (dropPercent >= thresholdPercent)
-                {
-                    var message = $"⚠️ Worker type '{workerType}' dropped by {dropPercent:F2}% " +
-                                  $"(Recent: {recentCount}, Historical: {historicalCount})";
-
-                    logger.LogWarning(message);
-
-                    // Send email alert
-                    await emailService.SendEmailAsync(
-                        subject: "Worker Drop Alert",
-                        body: message,
-                        to: "alerts@company.com"   // you can move to appsettings
-                    );
-                }
-            }
+            // worker is expected to have properties like WorkerType, PreviousCount, CurrentCount, DropPercentage
+            emailBody += $"<tr>" +
+                         $"<td>{worker.WorkerType}</td>" +
+                         $"<td>{worker.PreviousCount}</td>" +
+                         $"<td>{worker.CurrentCount}</td>" +
+                         $"<td>{worker.DropPercentage}%</td>" +
+                         $"</tr>";
         }
+
+        emailBody += "</table>";
+        emailBody += "<p>Please investigate immediately.</p>";
+        emailBody += "</body></html>";
+
+        // Send the email
+        _emailService.SendEmailInHtmlFormat(
+            _applicationSettings.FromEmailAddress,
+            _applicationSettings.ToEmailAddress,
+            subject,
+            emailBody
+        );
+
+        _logger.LogInformation("Worker drop alert email triggered successfully.");
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "Error occurred while monitoring workers.");
+        _logger.LogError($"Exception occurred while sending Worker Drop alert email: {ex}");
     }
 }
-
-
-
-
-CREATE PROCEDURE sp_get_unique_worker_counts
-    @StartTime DATETIME,
-    @EndTime DATETIME
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    SELECT 
-        WorkerType,
-        COUNT(DISTINCT WorkerId) AS UniqueWorkerCount
-    FROM WorkerActivity
-    WHERE ActivityTime BETWEEN @StartTime AND @EndTime
-    GROUP BY WorkerType;
-END
-
-
-
-
