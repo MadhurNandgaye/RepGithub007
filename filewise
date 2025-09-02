@@ -1,58 +1,43 @@
-public class WorkerMonitor
+public void Run()
 {
-    private readonly ILogger<WorkerMonitor> _logger;
-    private readonly IWorkerRepository _workerRepository;
-    private readonly IAlertService _alertService;
-    private readonly int _lookbackHours;
-    private readonly double _thresholdPercent;
+    var now = DateTime.UtcNow;
+    var recentWindowStart = now.AddHours(-_lookbackHours);
+    var historicalWindowStart = now.AddHours(-2 * _lookbackHours);
 
-    public WorkerMonitor(
-        ILogger<WorkerMonitor> logger,
-        IWorkerRepository workerRepository,
-        IAlertService alertService,
-        IConfiguration config)
+    // Query unique worker counts (synchronously)
+    var recentCounts = _workerRepository
+        .GetUniqueWorkerCountsAsync(recentWindowStart, now)
+        .GetAwaiter().GetResult();
+
+    var historicalCounts = _workerRepository
+        .GetUniqueWorkerCountsAsync(historicalWindowStart, now)
+        .GetAwaiter().GetResult();
+
+    foreach (var workerType in historicalCounts.Keys)
     {
-        _logger = logger;
-        _workerRepository = workerRepository;
-        _alertService = alertService;
-        _lookbackHours = config.GetValue<int>("WorkerMonitor:LookbackHours", 2);
-        _thresholdPercent = config.GetValue<double>("WorkerMonitor:ThresholdPercent", 10.0);
-    }
+        if (!recentCounts.ContainsKey(workerType)) continue;
 
-    public async Task RunAsync(CancellationToken cancellationToken)
-    {
-        var now = DateTime.UtcNow;
-        var recentWindowStart = now.AddHours(-_lookbackHours);
-        var historicalWindowStart = now.AddHours(-2 * _lookbackHours);
+        var recent = recentCounts[workerType];
+        var historical = historicalCounts[workerType];
 
-        // Query unique worker counts
-        var recentCounts = await _workerRepository.GetUniqueWorkerCountsAsync(recentWindowStart, now, cancellationToken);
-        var historicalCounts = await _workerRepository.GetUniqueWorkerCountsAsync(historicalWindowStart, now, cancellationToken);
+        if (historical == 0) continue;
 
-        foreach (var workerType in historicalCounts.Keys)
+        var dropPercent = (historical - recent) * 100.0 / historical;
+
+        if (dropPercent >= _thresholdPercent && recent < historical)
         {
-            if (!recentCounts.ContainsKey(workerType)) continue;
+            _logger.LogWarning(
+                "Worker drop detected for {WorkerType}: {Historical} -> {Recent} ({DropPercent}%)",
+                workerType, historical, recent, dropPercent);
 
-            var recent = recentCounts[workerType];
-            var historical = historicalCounts[workerType];
-
-            if (historical == 0) continue;
-
-            var dropPercent = (historical - recent) * 100.0 / historical;
-
-            if (dropPercent >= _thresholdPercent && recent < historical)
-            {
-                _logger.LogWarning("Worker drop detected for {WorkerType}: {Historical} -> {Recent} ({DropPercent}%)",
-                    workerType, historical, recent, dropPercent);
-
-                await _alertService.SendEmailAsync(
-                    subject: $"[ALERT] Worker drop detected for {workerType}",
-                    body: $"WorkerType: {workerType}\n" +
-                          $"Historical ({2 * _lookbackHours}h): {historical}\n" +
-                          $"Recent ({_lookbackHours}h): {recent}\n" +
-                          $"Drop: {dropPercent:F2}%"
-                );
-            }
+            // Call email alert synchronously
+            _alertService.SendEmailAsync(
+                subject: $"[ALERT] Worker drop detected for {workerType}",
+                body: $"WorkerType: {workerType}\n" +
+                      $"Historical ({2 * _lookbackHours}h): {historical}\n" +
+                      $"Recent ({_lookbackHours}h): {recent}\n" +
+                      $"Drop: {dropPercent:F2}%"
+            ).GetAwaiter().GetResult();
         }
     }
 }
@@ -60,10 +45,21 @@ public class WorkerMonitor
 
 
 
-{
-  "WorkerMonitor": {
-    "LookbackHours": 2,       // X
-    "ThresholdPercent": 10,   // Y
-    "CheckIntervalMinutes": 30
-  }
-}
+CREATE PROCEDURE sp_get_unique_worker_counts
+    @StartTime DATETIME,
+    @EndTime DATETIME
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT 
+        WorkerType,
+        COUNT(DISTINCT WorkerId) AS UniqueWorkerCount
+    FROM WorkerActivity
+    WHERE ActivityTime BETWEEN @StartTime AND @EndTime
+    GROUP BY WorkerType;
+END
+
+
+
+
