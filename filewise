@@ -1,44 +1,49 @@
-public void Run()
+public async Task MonitorWorkersAsync(
+    IWorkerRepository workerRepository,
+    ILogger logger,
+    IEmailService emailService,
+    int lookbackHours,
+    double thresholdPercent)
 {
-    var now = DateTime.UtcNow;
-    var recentWindowStart = now.AddHours(-_lookbackHours);
-    var historicalWindowStart = now.AddHours(-2 * _lookbackHours);
-
-    // Query unique worker counts (synchronously)
-    var recentCounts = _workerRepository
-        .GetUniqueWorkerCountsAsync(recentWindowStart, now)
-        .GetAwaiter().GetResult();
-
-    var historicalCounts = _workerRepository
-        .GetUniqueWorkerCountsAsync(historicalWindowStart, now)
-        .GetAwaiter().GetResult();
-
-    foreach (var workerType in historicalCounts.Keys)
+    try
     {
-        if (!recentCounts.ContainsKey(workerType)) continue;
+        var end = DateTime.UtcNow;
+        var startRecent = end.AddHours(-lookbackHours);
+        var startHistorical = end.AddHours(-(lookbackHours * 2));
 
-        var recent = recentCounts[workerType];
-        var historical = historicalCounts[workerType];
+        // Get counts
+        var recentCounts = await workerRepository.GetUniqueWorkerCountsAsync(startRecent, end);
+        var historicalCounts = await workerRepository.GetUniqueWorkerCountsAsync(startHistorical, startRecent);
 
-        if (historical == 0) continue;
-
-        var dropPercent = (historical - recent) * 100.0 / historical;
-
-        if (dropPercent >= _thresholdPercent && recent < historical)
+        foreach (var workerType in historicalCounts.Keys)
         {
-            _logger.LogWarning(
-                "Worker drop detected for {WorkerType}: {Historical} -> {Recent} ({DropPercent}%)",
-                workerType, historical, recent, dropPercent);
+            if (recentCounts.TryGetValue(workerType, out var recentCount))
+            {
+                var historicalCount = historicalCounts[workerType];
+                if (historicalCount == 0) continue;
 
-            // Call email alert synchronously
-            _alertService.SendEmailAsync(
-                subject: $"[ALERT] Worker drop detected for {workerType}",
-                body: $"WorkerType: {workerType}\n" +
-                      $"Historical ({2 * _lookbackHours}h): {historical}\n" +
-                      $"Recent ({_lookbackHours}h): {recent}\n" +
-                      $"Drop: {dropPercent:F2}%"
-            ).GetAwaiter().GetResult();
+                var dropPercent = ((double)(historicalCount - recentCount) / historicalCount) * 100;
+
+                if (dropPercent >= thresholdPercent)
+                {
+                    var message = $"⚠️ Worker type '{workerType}' dropped by {dropPercent:F2}% " +
+                                  $"(Recent: {recentCount}, Historical: {historicalCount})";
+
+                    logger.LogWarning(message);
+
+                    // Send email alert
+                    await emailService.SendEmailAsync(
+                        subject: "Worker Drop Alert",
+                        body: message,
+                        to: "alerts@company.com"   // you can move to appsettings
+                    );
+                }
+            }
         }
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error occurred while monitoring workers.");
     }
 }
 
