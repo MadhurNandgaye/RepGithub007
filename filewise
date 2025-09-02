@@ -1,4 +1,4 @@
-public void TriggerEmailAlertForWorkerDrop(IEnumerable<WorkerCountResult> workersWithDrop, int percentageDrop)
+public void TriggerEmailAlertForWorkerDrop(IEnumerable<string> workersWithDrop, int percentageDrop)
 {
     try
     {
@@ -9,21 +9,21 @@ public void TriggerEmailAlertForWorkerDrop(IEnumerable<WorkerCountResult> worker
         string emailBody = "<html><body>";
         emailBody += $"<p>Alert: We detected more than {percentageDrop}% decrease in workers.</p>";
         emailBody += $"<p>Time: {DateTime.UtcNow}</p>";
-        emailBody += "<table border=\"1\" style=\"border-collapse:collapse;\">";
-        emailBody += "<tr><th>Worker Type</th><th>Previous Count</th><th>Current Count</th><th>Drop (%)</th></tr>";
 
-        foreach (var worker in workersWithDrop)
+        if (workersWithDrop != null && workersWithDrop.Any())
         {
-            // worker is expected to have properties like WorkerType, PreviousCount, CurrentCount, DropPercentage
-            emailBody += $"<tr>" +
-                         $"<td>{worker.WorkerType}</td>" +
-                         $"<td>{worker.PreviousCount}</td>" +
-                         $"<td>{worker.CurrentCount}</td>" +
-                         $"<td>{worker.DropPercentage}%</td>" +
-                         $"</tr>";
+            emailBody += "<ul>"; // using unordered list since we don't have structured fields
+            foreach (var workerInfo in workersWithDrop)
+            {
+                emailBody += $"<li>{workerInfo}</li>"; // each string contains WorkerType, counts, drop %
+            }
+            emailBody += "</ul>";
+        }
+        else
+        {
+            emailBody += "<p>No worker drops detected.</p>";
         }
 
-        emailBody += "</table>";
         emailBody += "<p>Please investigate immediately.</p>";
         emailBody += "</body></html>";
 
