@@ -1,6 +1,2 @@
 hey
 
-var message =
-                    $"⚠️ Worker type '{workerType}' dropped by {dropPercent:F2}%\n" +
-                    $"Historical Window: {startHistorical:u} → {startRecent:u} (Count: {historicalCount})\n" +
-                    $"Recent Window: {startRecent:u} → {end:u} (Count: {recentCount})";
