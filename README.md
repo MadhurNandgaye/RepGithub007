@@ -6,7 +6,8 @@ Here are the commands to set up this project:
 * `npm install @mui/material @emotion/react @emotion/styled @mui/icons-material recharts
 
 * `npm install @mui/x-date-pickers dayjs`
-* `npm start`
+* `npm start
+  `<img width="1254" height="1254" alt="Madhur" src="https://github.com/user-attachments/assets/938c0c24-3c15-494e-9c61-836c49f80543" />
 
 <img width="1254" height="1254" alt="5A050F2C-F7AE-4653-850C-152335D8F3BD" src="https://github.com/user-attachments/assets/f5e457bc-cf2a-450d-80a9-36c42c6e6162" />
 
