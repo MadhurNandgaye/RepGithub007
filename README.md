@@ -3,7 +3,7 @@ Here are the commands to set up this project:
 
 * `npx create-react-app my-api-dashboard`
 * `cd my-api-dashboard`
-* `npm install @mui/material @emotion/react @emotion/styled @mui/icons-material recharts`
+* `npm install @mui/material @emotion/react @emotion/styled @mui/icons-material recharts`![Uploading 5A050F2C-F7AE-4653-850C-152335D8F3BD.PNG…]()
 * `npm install @mui/x-date-pickers dayjs`
 * `npm start`
 
